@@ -1,0 +1,144 @@
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+
+CREATE TABLE vendedor (
+	empresa	 VARCHAR(512) NOT NULL,
+	nif	 NUMERIC(9,0) NOT NULL,
+	morada	 VARCHAR(512) NOT NULL,
+	pessoa_id SERIAL,
+	PRIMARY KEY(pessoa_id)
+);
+
+CREATE TABLE computador (
+	processador		 VARCHAR(512) NOT NULL,
+	sistema_operativo		 VARCHAR(512) NOT NULL,
+	armazenamento		 VARCHAR(512) NOT NULL,
+	camara			 BOOL NOT NULL,
+	produto_id		 INTEGER,
+	produto_marca		 VARCHAR(512) NOT NULL,
+	produto_stock		 INTEGER NOT NULL,
+	produto_vendedor_pessoa_id SERIAL NOT NULL,
+	PRIMARY KEY(produto_id)
+);
+
+CREATE TABLE televisor (
+	comprimento		 NUMERIC(6,2) NOT NULL,
+	largura			 NUMERIC(6,2) NOT NULL,
+	peso			 NUMERIC(4,2) NOT NULL,
+	resolucao			 VARCHAR(512) NOT NULL,
+	produto_id		 INTEGER,
+	produto_marca		 VARCHAR(512) NOT NULL,
+	produto_stock		 INTEGER NOT NULL,
+	produto_vendedor_pessoa_id SERIAL NOT NULL,
+	PRIMARY KEY(produto_id)
+);
+
+CREATE TABLE smartphone (
+	modelo			 VARCHAR(512) NOT NULL,
+	cor			 VARCHAR(512) NOT NULL,
+	produto_id		 INTEGER,
+	produto_marca		 VARCHAR(512) NOT NULL,
+	produto_stock		 INTEGER NOT NULL,
+	produto_vendedor_pessoa_id SERIAL NOT NULL,
+	PRIMARY KEY(produto_id)
+);
+
+CREATE TABLE versao (
+	numero_versao	 NUMERIC(8,2) NOT NULL,
+	descricao		 VARCHAR(512),
+	preco		 NUMERIC(8,2) NOT NULL,
+	data_alteracao	 TIMESTAMP NOT NULL,
+	smartphone_produto_id INTEGER,
+	PRIMARY KEY(numero_versao,smartphone_produto_id)
+);
+
+CREATE TABLE administrador (
+	area	 VARCHAR(512) NOT NULL,
+	pessoa_id SERIAL,
+	PRIMARY KEY(pessoa_id)
+);
+
+CREATE TABLE comprador (
+	cc	 VARCHAR(12) NOT NULL,
+	morada	 VARCHAR(512) NOT NULL,
+	nif	 NUMERIC(9,0),
+	pessoa_id SERIAL,
+	PRIMARY KEY(pessoa_id)
+);
+
+CREATE TABLE pessoa (
+	id	 SERIAL,
+	username VARCHAR(512),
+	password VARCHAR(512) NOT NULL,
+	contacto NUMERIC(9,0) NOT NULL,
+	email	 VARCHAR(512),
+	PRIMARY KEY(id)
+);
+
+CREATE TABLE encomenda (
+	id			 INTEGER,
+	data		 TIMESTAMP NOT NULL,
+	comprador_pessoa_id SERIAL NOT NULL,
+	PRIMARY KEY(id)
+);
+
+CREATE TABLE rating (
+	classificacao	 INTEGER NOT NULL,
+	comentario		 VARCHAR(512),
+	smartphone_produto_id INTEGER,
+	PRIMARY KEY(smartphone_produto_id)
+);
+
+CREATE TABLE forum (
+	id			 INTEGER,
+	post			 VARCHAR(512) NOT NULL,
+	smartphone_produto_id INTEGER NOT NULL,
+	PRIMARY KEY(id)
+);
+
+CREATE TABLE notificacao (
+	id		 INTEGER,
+	mensagem	 VARCHAR(512) NOT NULL,
+	encomenda_id INTEGER NOT NULL,
+	forum_id	 INTEGER NOT NULL,
+	PRIMARY KEY(id)
+);
+
+CREATE TABLE quantidade (
+	numero		 NUMERIC(8,0) NOT NULL,
+	smartphone_produto_id INTEGER,
+	encomenda_id		 INTEGER NOT NULL,
+	PRIMARY KEY(smartphone_produto_id)
+);
+
+CREATE TABLE notificacao_pessoa (
+	notificacao_id INTEGER,
+	pessoa_id	 SERIAL,
+	PRIMARY KEY(notificacao_id,pessoa_id)
+);
+
+CREATE TABLE pessoa_forum (
+	pessoa_id SERIAL,
+	forum_id	 INTEGER,
+	PRIMARY KEY(pessoa_id,forum_id)
+);
+
+ALTER TABLE vendedor ADD CONSTRAINT vendedor_fk1 FOREIGN KEY (pessoa_id) REFERENCES pessoa(id);
+ALTER TABLE computador ADD CONSTRAINT computador_fk1 FOREIGN KEY (produto_vendedor_pessoa_id) REFERENCES vendedor(pessoa_id);
+ALTER TABLE televisor ADD CONSTRAINT televisor_fk1 FOREIGN KEY (produto_vendedor_pessoa_id) REFERENCES vendedor(pessoa_id);
+ALTER TABLE smartphone ADD CONSTRAINT smartphone_fk1 FOREIGN KEY (produto_vendedor_pessoa_id) REFERENCES vendedor(pessoa_id);
+ALTER TABLE versao ADD CONSTRAINT versao_fk1 FOREIGN KEY (smartphone_produto_id) REFERENCES smartphone(produto_id);
+ALTER TABLE administrador ADD CONSTRAINT administrador_fk1 FOREIGN KEY (pessoa_id) REFERENCES pessoa(id);
+ALTER TABLE comprador ADD CONSTRAINT comprador_fk1 FOREIGN KEY (pessoa_id) REFERENCES pessoa(id);
+ALTER TABLE encomenda ADD CONSTRAINT encomenda_fk1 FOREIGN KEY (comprador_pessoa_id) REFERENCES comprador(pessoa_id);
+ALTER TABLE rating ADD CONSTRAINT rating_fk1 FOREIGN KEY (smartphone_produto_id) REFERENCES smartphone(produto_id);
+ALTER TABLE forum ADD CONSTRAINT forum_fk1 FOREIGN KEY (smartphone_produto_id) REFERENCES smartphone(produto_id);
+ALTER TABLE notificacao ADD CONSTRAINT notificacao_fk1 FOREIGN KEY (encomenda_id) REFERENCES encomenda(id);
+ALTER TABLE notificacao ADD CONSTRAINT notificacao_fk2 FOREIGN KEY (forum_id) REFERENCES forum(id);
+ALTER TABLE quantidade ADD CONSTRAINT quantidade_fk1 FOREIGN KEY (smartphone_produto_id) REFERENCES smartphone(produto_id);
+ALTER TABLE quantidade ADD CONSTRAINT quantidade_fk2 FOREIGN KEY (encomenda_id) REFERENCES encomenda(id);
+ALTER TABLE notificacao_pessoa ADD CONSTRAINT notificacao_pessoa_fk1 FOREIGN KEY (notificacao_id) REFERENCES notificacao(id);
+ALTER TABLE notificacao_pessoa ADD CONSTRAINT notificacao_pessoa_fk2 FOREIGN KEY (pessoa_id) REFERENCES pessoa(id);
+ALTER TABLE pessoa_forum ADD CONSTRAINT pessoa_forum_fk1 FOREIGN KEY (pessoa_id) REFERENCES pessoa(id);
+ALTER TABLE pessoa_forum ADD CONSTRAINT pessoa_forum_fk2 FOREIGN KEY (forum_id) REFERENCES forum(id);
+
