@@ -209,6 +209,113 @@ def registaUtilizador():
 
     return jsonify(content)
 
+#POST
+#TODO meter as cenas da versao
+@app.route('/dbproj/produto', methods=['POST'])
+def addProduto():
+    conn = db_connection()
+    cur = conn.cursor()
+
+    payload = request.get_json()
+    print(payload) #Print de todos os parametros passados pelo .json
+
+    try:
+        if "id" in payload and "marca" in payload and "stock" in payload and "vendedor_pessoa_id" in payload and "preco" in payload:
+            id = payload["id"]
+            marca = payload["marca"]
+            stock = payload["stock"]
+            vendedor_id = payload["vendedor_pessoa_id"]
+            preco = payload["preco"]
+
+            query = """ INSERT INTO 
+                        produto(id, marca, stock, vendedor_pessoa_id)
+                        VALUES
+                        (%s, %s, %s, %s)"""
+            values = (id, marca, stock, vendedor_id)
+
+            if("descricao" in payload):
+                descricao = payload["descricao"]
+            else:
+                descricao = "-"
+
+            query3 = """INSERT INTO
+                        versao(numero_versao, descricao, preco, data_alteracao, produto_id)
+                        VALUES
+                        (%s, %s, %s, TIMESTAMP, %s)"""
+            values3 = (1, descricao, preco, id)
+            cur.execute("BEGIN TRANSACTION")
+            cur.execute(query, values)
+            cur.execute(query3, values3)
+            cur.execute("COMMIT")
+
+
+            if("processador" in payload and "sistema_operativo" in payload and "armazenamento" in payload and "camara" in payload):
+
+                processador = payload["processador"]
+                sistema_operativo = payload["sistema_operativo"]
+                armazenamento = payload["armazenamento"]
+                camara = payload["camara"]
+
+                query2 = """ INSERT INTO
+                            computador(processador, sistema_operativo, armazenamento, camara, produto_id)
+                            VALUES
+                            (%s, %s, %s, %s)"""
+                values2 = (processador, sistema_operativo, armazenamento, camara, id)
+
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(query2, values2)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': id}
+
+            elif("comprimento" in payload and "largura" in payload and "peso" in payload and "resolucao" in payload):
+
+                comprimento = payload["comprimento"]
+                largura = payload["largura"]
+                peso = payload["peso"]
+                resolucao = payload["resolucao"]
+
+
+                query2 = """INSERT INTO
+                            televisor(comprimento, largura, peso, resolucao, produto_id)
+                            VALUES
+                            (%s, %s, %s, %s, %s)"""
+                values2 = (comprimento, largura, peso, resolucao, id)
+
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(query2, values2)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': id}
+
+            elif("modelo" in payload and "cor" in payload):
+
+                modelo = payload["modelo"]
+                cor = payload["cor"]
+
+                query2 = """INSERT INTO
+                            smartphone(modelo, cor, produto_id)
+                            VALUES
+                            (%s, %s, %s)"""
+                values2 = (modelo, cor, id)
+
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(query2, values2)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': id}
+
+            else:
+                content = {'results': 'invalid'}
+        else:
+            content = {'results': 'invalid'}
+    except (Exception, psycopg2.DatabaseError) as error:
+        content = {'error:': str(error)}
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return jsonify(content)
 
 #PUT
 @app.route('/dbproj/user', methods=['PUT'])
@@ -243,130 +350,6 @@ def autenticaUtilizador():
             conn.close()
 
     return jsonify(content)
-
-#TODO cant fucking use produto if inserting another table, can I?
-#TODO wait no i kinda can i believe
-#TODO still not sure if the endpoint should be produto
-@app.route('/produto/', methods=['POST'])
-def add_produto():
-    logger.info('POST /produto')
-    payload = flask.request.get_json()
-
-    conn = db_connection()
-    cur = conn.cursor()
-
-    logger.debug(f'POST /produto - payload: {payload}')
-
-    # do not forget to validate every argument, e.g.,:
-    if 'produto_id' not in payload:
-        response = {'status': StatusCodes['api_error'], 'results': 'produto_id value not in payload'}
-        return flask.jsonify(response)
-
-    #TODO check if better way to do this
-    #TODO update description and price on table versao
-    if(payload['tipo'] == 'computador'):
-        comp_create_stmt = """INSERT INTO computador
-                    (processador, sistema_operativo, armazenamento, camara, produto_id, produto_marca, produto_stock, produto_vendedor)
-                   VALUES
-                    (%s, %s, %s, %s, %d, %s, %d, %d)"""
-        values_comp = (payload['processador'], payload['sistema_operativo'], payload['armazenamento'], payload['camara'], payload['produto_id'], payload['produto_marca'], payload['produto_stock'], payload['produto_vendedor'])
-
-        #TODO trying to also add the versao table part
-        #TODO also why is the version product id still have smartphone in the name???
-        version_create_stmt = """INSERT INTO versao
-                            (descricao, preco, data_alteracao, smartphone_produto_id)
-                            VALUES
-                            (%s, %f, TIMESTAMP, %d)
-                                """
-        values_versao = (payload['descricao'], payload['preco'], payload['produto_id'])
-
-        try:
-            cur.execute(comp_create_stmt, values_comp)
-            cur.execute(version_create_stmt, values_versao)
-
-            # commit the transaction
-            conn.commit()
-            response = {'status': StatusCodes['success'], 'results': f'Inserted produto (computador) {payload["id_produto"]}'}
-
-        except (Exception, psycopg2.DatabaseError) as error:
-            logger.error(f'POST /produto - error: {error}')
-            response = {'status': StatusCodes['internal_error'], 'errors': str(error)}
-
-            # an error occurred, rollback
-            conn.rollback()
-
-        finally:
-            if conn is not None:
-                conn.close()
-
-    elif(payload['tipo'] == 'televisor'):
-        tel_create_stmt = """INSERT INTO televisor
-                    (comprimento, largura, peso, resolucao, produto_id, produto_marca, produto_stock, produto_vendedor)
-                   VALUES
-                    (%d, %d, %d, %s, %d, %s, %d, %d)"""
-        values_tel = (payload['comprimento'], payload['largura'], payload['peso'], payload['resolucao'], payload['produto_id'], payload['produto_marca'], payload['produto_stock'], payload['produto_vendedor'])
-
-        version_create_stmt = """INSERT INTO versao
-                                    (descricao, preco, data_alteracao, smartphone_produto_id)
-                                    VALUES
-                                    (%s, %f, TIMESTAMP, %d)
-                                        """
-        values_versao = (payload['descricao'], payload['preco'], payload['produto_id'])
-
-        try:
-            cur.execute(tel_create_stmt, values_tel)
-            cur.execute(version_create_stmt, values_versao)
-
-            # commit the transaction
-            conn.commit()
-            response = {'status': StatusCodes['success'], 'results': f'Inserted produto (televisor) {payload["id_produto"]}'}
-
-        except (Exception, psycopg2.DatabaseError) as error:
-            logger.error(f'POST /produto - error: {error}')
-            response = {'status': StatusCodes['internal_error'], 'errors': str(error)}
-
-            # an error occurred, rollback
-            conn.rollback()
-
-        finally:
-            if conn is not None:
-                conn.close()
-
-    elif (payload['tipo'] == 'smartphone'):
-        phone_create_stmt = """INSERT INTO smartphone
-                        (modelo, cor, produto_id, produto_marca, produto_stock, produto_vendedor)
-                       VALUES
-                        (%s, %s, %d, %s, %d, %d)"""
-        values_phone = (payload['modelo'], payload['cor'], payload['produto_id'], payload['produto_marca'], payload['produto_stock'], payload['produto_vendedor'])
-
-        version_create_stmt = """INSERT INTO versao
-                                    (descricao, preco, data_alteracao, smartphone_produto_id)
-                                    VALUES
-                                    (%s, %f, TIMESTAMP, %d)
-                                        """
-        values_versao = (payload['descricao'], payload['preco'], payload['produto_id'])
-
-        try:
-            cur.execute(phone_create_stmt, values_phone)
-            cur.execute(version_create_stmt, values_versao)
-
-            # commit the transaction
-            conn.commit()
-            response = {'status': StatusCodes['success'], 'results': f'Inserted produto (smartphone) {payload["id_produto"]}'}
-
-        except (Exception, psycopg2.DatabaseError) as error:
-            logger.error(f'POST /produto - error: {error}')
-            response = {'status': StatusCodes['internal_error'], 'errors': str(error)}
-
-            # an error occurred, rollback
-            conn.rollback()
-
-        finally:
-            if conn is not None:
-                conn.close()
-
-
-    return flask.jsonify(response)
 
 
 #MAIN
