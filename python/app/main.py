@@ -1,6 +1,7 @@
-import psycopg2, time, logging
+import psycopg2, time
 import flask
 from flask import jsonify, request, Flask
+import logging
 
 app = Flask(__name__)
 
@@ -209,8 +210,9 @@ def registaUtilizador():
 
     return jsonify(content)
 
+#3 ponto
 #POST
-#TODO meter as cenas da versao
+#TODO test
 @app.route('/dbproj/produto', methods=['POST'])
 def addProduto():
     conn = db_connection()
@@ -227,25 +229,20 @@ def addProduto():
             vendedor_id = payload["vendedor_pessoa_id"]
             preco = payload["preco"]
 
-            query = """ INSERT INTO 
-                        produto(id, marca, stock, vendedor_pessoa_id)
-                        VALUES
-                        (%s, %s, %s, %s)"""
-            values = (id, marca, stock, vendedor_id)
-
-            if("descricao" in payload):
+            if ("descricao" in payload):
                 descricao = payload["descricao"]
             else:
                 descricao = "-"
 
-            query3 = """INSERT INTO
-                        versao(numero_versao, descricao, preco, data_alteracao, produto_id)
+            query = """ INSERT INTO 
+                        produto(id, marca, stock, vendedor_pessoa_id, descricao, preco, data, produto_num_versao)
                         VALUES
-                        (%s, %s, %s, TIMESTAMP, %s)"""
-            values3 = (1, descricao, preco, id)
+                        (%s, %s, %s, %s, %s, %s, TIMESTAMP, %s)"""
+            values = (id, marca, stock, vendedor_id, descricao, preco, 1)
+
+
             cur.execute("BEGIN TRANSACTION")
             cur.execute(query, values)
-            cur.execute(query3, values3)
             cur.execute("COMMIT")
 
 
@@ -257,10 +254,10 @@ def addProduto():
                 camara = payload["camara"]
 
                 query2 = """ INSERT INTO
-                            computador(processador, sistema_operativo, armazenamento, camara, produto_id)
+                            computador(processador, sistema_operativo, armazenamento, camara, produto_id, produto_num_versao)
                             VALUES
-                            (%s, %s, %s, %s)"""
-                values2 = (processador, sistema_operativo, armazenamento, camara, id)
+                            (%s, %s, %s, %s, %s)"""
+                values2 = (processador, sistema_operativo, armazenamento, camara, id, 1)
 
                 cur.execute("BEGIN TRANSACTION")
                 cur.execute(query2, values2)
@@ -277,10 +274,10 @@ def addProduto():
 
 
                 query2 = """INSERT INTO
-                            televisor(comprimento, largura, peso, resolucao, produto_id)
+                            televisor(comprimento, largura, peso, resolucao, produto_id, produto_num_versao)
                             VALUES
-                            (%s, %s, %s, %s, %s)"""
-                values2 = (comprimento, largura, peso, resolucao, id)
+                            (%s, %s, %s, %s, %s, %s)"""
+                values2 = (comprimento, largura, peso, resolucao, id, 1)
 
                 cur.execute("BEGIN TRANSACTION")
                 cur.execute(query2, values2)
@@ -294,10 +291,10 @@ def addProduto():
                 cor = payload["cor"]
 
                 query2 = """INSERT INTO
-                            smartphone(modelo, cor, produto_id)
+                            smartphone(modelo, cor, produto_id, produto_num_versao)
                             VALUES
-                            (%s, %s, %s)"""
-                values2 = (modelo, cor, id)
+                            (%s, %s, %s, %s)"""
+                values2 = (modelo, cor, id, 1)
 
                 cur.execute("BEGIN TRANSACTION")
                 cur.execute(query2, values2)
@@ -351,6 +348,131 @@ def autenticaUtilizador():
 
     return jsonify(content)
 
+#TODO adapt to also showcase the stuff from the subclasses
+#GET
+@app.route('/dbproj/produto/<produto_id>', methods=['GET'])
+def detalhes_produto(produto_id: str):
+    #logger.info(f"Detalhes e histórico para produto com id {produto_id}")
+    if not produto_id.isdigit():
+        #logger
+        return jsonify({'error' : 'Invalid product Id was provided', 'code': StatusCodes['api_error']})
+
+    conn = db_connection()
+    cur = conn.cursor()
+
+    try:
+
+        find_if_product = """   SELECT id
+                                FROM produto
+                                WHERE id = %s"""
+        cur.execute(find_if_product, [produto_id])
+        rows = cur.fetchall()
+        if(rows.len > 0):   #produto existe
+
+            #Do query to find if any of the subtables have a product with provided Id, if yes, do query also using data from that table
+            find_comp_stmt =    """     SELECT produto_id
+                                        FROM computador
+                                        WHERE produto_id = %s;
+                                """
+
+            cur.execute(find_comp_stmt, [produto_id])
+            rows = cur.fetchall()
+
+            if(rows.len() > 0):
+                comp_details_stmt = """  SELECT produto.titulo "Titulo", produto.stock "Stock", produto.preco "Preço", produto.num_versao "Versão", produto.marca "Marca", computador.processador "Processador", computador.sistema_operativo "SO", computador.armazenamento "Armazenamento", computador.camara "Câmara", produto.descricao "Descricao", produto.data "Data alteração"
+                                            FROM produto, computador
+                                            WHERE id = %s AND produto.id = computador.produto_id
+                                            ORDER BY data ASC;"""
+
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(comp_details_stmt, [produto_id])
+                cur.execute("COMMIT")
+
+                rows = cur.fetchall()
+
+                if (rows.len() > 0):
+                    content = {"code": StatusCodes['success']}
+                else:
+                    content = {"code": StatusCodes['api_error']}
+
+            else:
+                find_tel_stmt = """     SELECT produto_id
+                                        FROM televisor
+                                        WHERE produto_id = %s;"""
+
+                cur.execute(find_tel_stmt, [produto_id])
+                rows = cur.fetchall()
+                if (rows.len() > 0):
+                    tel_details_stmt = """  SELECT produto.titulo "Titulo", produto.stock "Stock", produto.preco "Preço", produto.num_versao "Versão", produto.marca "Marca", televisor.comprimento "Comprimento", televisor.largura "Largura", televisor.peso "Peso", televisor.resolucao "Resolução", produto.descricao "Descricao", produto.data "Data alteração"
+                                            FROM produto, televisor
+                                            WHERE id = %s AND produto.id = televisor.produto_id
+                                            ORDER BY data ASC;"""
+
+                    cur.execute("BEGIN TRANSACTION")
+                    cur.execute(tel_details_stmt, [produto_id])
+                    cur.execute("COMMIT")
+
+                    rows = cur.fetchall()
+
+                    if (rows.len() > 0):
+                        content = {"code": StatusCodes['success']}
+                    else:
+                        content = {"code": StatusCodes['api_error']}
+
+                else:
+                    find_phone_stmt = """   SELECT produto_id
+                                            FROM smartphone
+                                            WHERE produto_id = %s;"""
+
+                    cur.execute(find_phone_stmt, [produto_id])
+                    rows = cur.fetchall()
+                    if (rows.len() > 0):
+                        phone_details_stmt = """  SELECT produto.titulo "Titulo", produto.stock "Stock", produto.preco "Preço", produto.num_versao "Versão", produto.marca "Marca", smartphone.modelo "Modelo", smartphone.cor "Cor", produto.descricao "Descricao", produto.data "Data alteração"
+                                                FROM produto, televisor
+                                                WHERE id = %s AND produto.id = televisor.produto_id
+                                                ORDER BY data ASC;"""
+
+                        cur.execute("BEGIN TRANSACTION")
+                        cur.execute(phone_details_stmt, [produto_id])
+                        cur.execute("COMMIT")
+
+                        rows = cur.fetchall()
+
+                        if (rows.len() > 0):
+                            content = {"code": StatusCodes['success']}
+                        else:
+                            content = {"code": StatusCodes['api_error']}
+
+                    else:
+                        #if not a specific type of product, prints general table
+                        produto_details_stmt = """  SELECT titulo "Titulo", stock "Stock", marca "Marca", preco "Preço", num_versao "Versão", descricao "Descricao", data "Data alteração"
+                                                    FROM produto
+                                                    WHERE id = %s 
+                                                    ORDER BY data ASC;"""
+
+                        cur.execute("BEGIN TRANSACTION")
+                        cur.execute(produto_details_stmt, [produto_id])
+                        cur.execute("COMMIT")
+
+                        rows = cur.fetchall()
+
+                        if (rows.len() > 0):
+                            content = {"code": StatusCodes['success']}
+                        else:
+                            content = {"code": StatusCodes['api_error']}
+
+        else:
+            #TODO error message for product not found
+            print("no error")
+
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        content = {'error:': str(error)}
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return jsonify(content)
 
 #MAIN
 if __name__ == "__main__":
