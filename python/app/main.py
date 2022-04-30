@@ -348,6 +348,50 @@ def autenticaUtilizador():
 
     return jsonify(content)
 
+#PUT
+#TODO por agora kinda toda a gente pode editar, como é que raio é que fazemos com que so admins e o vendedor é que possa?
+@app.route('/dbproj/produto/<id>', methods=['PUT'])
+def atualizar_produto(id: str):
+    if not id.isdigit():
+        return jsonify({'error' : 'Invalid product Id was provided', 'code': StatusCodes['api_error']})
+
+    conn = db_connection()
+    cur = conn.cursor()
+
+    payload = request.get_json()
+
+    try:
+        find_product_stmt = """ SELECT id
+                                FROM produto
+                                WHERE produto.id = %s;"""
+        cur.execute(find_product_stmt, [id])
+        rows = cur.fetchall()
+        if(rows.len() > 0):
+            #TODO not sure if user needs to also input old values to update everything even if still the same or only one value, consult after
+            add_version_stmt = """  INSERT INTO 
+                                    produto(id, marca, stock, descricao, preco, data, produto_id, produto_num_versao, vendedor_pessoa_id)
+                                    VALUES
+                                    (%s, %s, %s, %s, %s, TIMESTAMP, %s)"""
+            values_update = ([id], payload["marca"], payload["stock"], payload["descricao"], payload["preco"], payload["produto_id"], payload["produto_num_versao"],payload["vendedor_pessoa_id"])
+
+            cur.execute("BEGIN TRANSACTION")
+            cur.execute(add_version_stmt, values_update)
+            cur.execute("COMMIT")
+
+            content = {'status': StatusCodes['success'], 'results': [id]}
+
+        else:
+            content = {"code": StatusCodes['api_error']}
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        content = {'error:': str(error)}
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return jsonify(content)
+
+
 #TODO adapt to also showcase the stuff from the subclasses
 #GET
 @app.route('/dbproj/produto/<produto_id>', methods=['GET'])
