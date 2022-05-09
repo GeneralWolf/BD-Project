@@ -367,18 +367,63 @@ def atualizar_produto(id: str):
         cur.execute(find_product_stmt, [id])
         rows = cur.fetchall()
         if(rows.len() > 0):
+
+            versions = list()
+            #find max version since through sql seems ill have to use cursors
+            for row in rows:
+                versions.append(row[1])
+                titulo = row[2]
+                marca = row[3]
+                stock = row[4]
+                descricao = row[5]
+                preco = row[6]
+                vendedor_pessoa_id = row[10]
+
+            new_ver = int(max(versions)) + 1
+
+
+            if("stock" in payload and "preco" in payload and "descricao" in payload):   #vem com tudo
+                add_version_stmt = """  INSERT
+                                        INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, produto_id, produto_num_versao, vendedor_pessoa_id)
+                                        VALUES
+                                        ( %s, %s, %s, %s, %s, TIMESTAMP, %s)"""
+                values_update = ([id], payload["marca"], payload["stock"], payload["descricao"], payload["preco"], payload["produto_id"])
+
+            elif("stock" in payload and "preco" in payload and "descricao" not in payload): #nao vem com descricao
+
+
+            elif("stock" in payload and "preco" not in payload and "descricao" in payload): #nao vem com preço
+
+
+            elif("stock" in payload and "preco" not in payload and "descricao" not in payload): #so vem com stock
+
+
+            elif("stock" not in payload and "preco" in payload and "descricao" in payload): #nao vem com stock
+
+
+            elif ("stock" not in payload and "preco" in payload and "descricao" not in payload): #so vem com preço
+
+
+            elif ("stock" not in payload and "preco" not in payload and "descricao" in payload):    #so vem com descriçao
+
+
+            elif ("stock" not in payload and "preco" not in payload and "descricao" not in payload):    #nao vem com nada manda erro
+
+
+            """
             #TODO not sure if user needs to also input old values to update everything even if still the same or only one value, consult after
-            add_version_stmt = """  INSERT INTO 
-                                    produto(id, marca, stock, descricao, preco, data, produto_id, produto_num_versao, vendedor_pessoa_id)
+            add_version_stmt = """  """INSERT INTO
+                                    produto(id, marca, stock, descricao, preco, data, produto_id)
                                     VALUES
-                                    (%s, %s, %s, %s, %s, TIMESTAMP, %s)"""
-            values_update = ([id], payload["marca"], payload["stock"], payload["descricao"], payload["preco"], payload["produto_id"], payload["produto_num_versao"],payload["vendedor_pessoa_id"])
+                                    """"""(%s, %s, %s, %s, %s, TIMESTAMP, %s)""""""
+            values_update = ([id], payload["marca"], payload["stock"], payload["descricao"], payload["preco"], payload["produto_id"])
 
             cur.execute("BEGIN TRANSACTION")
             cur.execute(add_version_stmt, values_update)
             cur.execute("COMMIT")
 
             content = {'status': StatusCodes['success'], 'results': [id]}
+            """
 
         else:
             content = {"code": StatusCodes['api_error']}

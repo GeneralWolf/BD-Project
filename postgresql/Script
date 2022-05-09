@@ -13,6 +13,7 @@ CREATE TABLE produto (
 	id		 INTEGER,
 	num_versao	 SERIAL,
 	marca		 VARCHAR(512) NOT NULL,
+	titulo       VARCHAR(512) NOT NULL,
 	stock		 INTEGER NOT NULL,
 	descricao		 VARCHAR(512),
 	preco		 NUMERIC(8,2) NOT NULL,
