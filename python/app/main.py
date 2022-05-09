@@ -382,33 +382,103 @@ def atualizar_produto(id: str):
             new_ver = int(max(versions)) + 1
 
 
-            if("stock" in payload and "preco" in payload and "descricao" in payload):   #vem com tudo
+            if("stock" in payload and "preco" in payload and "descricao" in payload):   #vem com tudo   #TODO nao adicionei produto_id porque o jo tirou
                 add_version_stmt = """  INSERT
-                                        INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, produto_id, produto_num_versao, vendedor_pessoa_id)
+                                        INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
                                         VALUES
-                                        ( %s, %s, %s, %s, %s, TIMESTAMP, %s)"""
-                values_update = ([id], payload["marca"], payload["stock"], payload["descricao"], payload["preco"], payload["produto_id"])
+                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
+                values_update = ([id], new_ver, titulo, marca, payload["stock"], payload["descricao"], payload["preco"],vendedor_pessoa_id)
+
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(add_version_stmt, values_update)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': [id]}
 
             elif("stock" in payload and "preco" in payload and "descricao" not in payload): #nao vem com descricao
+                add_version_stmt = """  INSERT
+                                        INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
+                                        VALUES
+                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
+                values_update = ([id], new_ver, titulo, marca, payload["stock"], descricao, payload["preco"], vendedor_pessoa_id)
 
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(add_version_stmt, values_update)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': [id]}
 
             elif("stock" in payload and "preco" not in payload and "descricao" in payload): #nao vem com preço
+                add_version_stmt = """  INSERT
+                                        INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
+                                        VALUES
+                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
+                values_update = ([id], new_ver, titulo, marca, payload["stock"], payload["descricao"], preco, vendedor_pessoa_id)
 
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(add_version_stmt, values_update)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': [id]}
 
             elif("stock" in payload and "preco" not in payload and "descricao" not in payload): #so vem com stock
+                add_version_stmt = """  INSERT
+                                        INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
+                                        VALUES
+                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
+                values_update = (
+                [id], new_ver, titulo, marca, payload["stock"], descricao, preco, vendedor_pessoa_id)
 
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(add_version_stmt, values_update)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': [id]}
 
             elif("stock" not in payload and "preco" in payload and "descricao" in payload): #nao vem com stock
+                add_version_stmt = """  INSERT
+                                        INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
+                                        VALUES
+                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
+                values_update = (
+                    [id], new_ver, titulo, marca, stock, payload["descricao"], payload["preco"], vendedor_pessoa_id)
 
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(add_version_stmt, values_update)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': [id]}
 
             elif ("stock" not in payload and "preco" in payload and "descricao" not in payload): #so vem com preço
+                add_version_stmt = """  INSERT
+                                        INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
+                                        VALUES
+                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
+                values_update = (
+                    [id], new_ver, titulo, marca, stock, descricao, payload["preco"], vendedor_pessoa_id)
 
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(add_version_stmt, values_update)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': [id]}
 
             elif ("stock" not in payload and "preco" not in payload and "descricao" in payload):    #so vem com descriçao
+                add_version_stmt = """  INSERT
+                                        INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
+                                        VALUES
+                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
+                values_update = (
+                    [id], new_ver, titulo, marca, stock, payload["descricao"], payload["preco"], vendedor_pessoa_id)
 
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(add_version_stmt, values_update)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': [id]}
 
             elif ("stock" not in payload and "preco" not in payload and "descricao" not in payload):    #nao vem com nada manda erro
-
+                content = {"code": StatusCodes['api_error']}
 
             """
             #TODO not sure if user needs to also input old values to update everything even if still the same or only one value, consult after
