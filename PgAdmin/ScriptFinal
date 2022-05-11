@@ -11,9 +11,9 @@ CREATE TABLE vendedor (
 
 CREATE TABLE produto (
 	id		 INTEGER,
-	num_versao	 SERIAL,
+	num_versao	 INTEGER,
+	titulo		 VARCHAR(512) NOT NULL,
 	marca		 VARCHAR(512) NOT NULL,
-	titulo       VARCHAR(512) NOT NULL,
 	stock		 INTEGER NOT NULL,
 	descricao		 VARCHAR(512),
 	preco		 NUMERIC(8,2) NOT NULL,
@@ -76,7 +76,7 @@ CREATE TABLE pessoa (
 );
 
 CREATE TABLE encomenda (
-	id			 INTEGER,
+	id			 Serial,
 	data		 TIMESTAMP NOT NULL,
 	comprador_pessoa_id INTEGER NOT NULL,
 	PRIMARY KEY(id)
@@ -88,30 +88,23 @@ CREATE TABLE rating (
 	comprador_pessoa_id	 INTEGER,
 	produto_id		 INTEGER,
 	produto_num_versao	 INTEGER,
-	comprador_pessoa_id1 INTEGER NOT NULL,
 	PRIMARY KEY(comprador_pessoa_id,produto_id,produto_num_versao)
 );
 
 CREATE TABLE forum (
 	id		 INTEGER,
-	num_post		 SERIAL,
+	num_post		 NUMERIC(8,2),
 	post		 VARCHAR(512) NOT NULL,
 	forum_id		 INTEGER NOT NULL,
-	forum_num_post	 SERIAL NOT NULL,
+	forum_num_post	 NUMERIC(8,2) NOT NULL,
 	produto_id	 INTEGER NOT NULL,
 	produto_num_versao INTEGER NOT NULL,
 	PRIMARY KEY(id,num_post)
 );
 
 CREATE TABLE notificacao (
-	id			 INTEGER,
-	mensagem			 VARCHAR(512) NOT NULL,
-	rating_comprador_pessoa_id INTEGER NOT NULL,
-	rating_produto_id		 INTEGER NOT NULL,
-	rating_produto_num_versao	 INTEGER NOT NULL,
-	encomenda_id		 INTEGER NOT NULL,
-	forum_id			 INTEGER NOT NULL,
-	forum_num_post		 SERIAL NOT NULL,
+	id	 Serial,
+	mensagem VARCHAR(512) NOT NULL,
 	PRIMARY KEY(id)
 );
 
@@ -123,6 +116,19 @@ CREATE TABLE quantidade (
 	PRIMARY KEY(encomenda_id,produto_id,produto_num_versao)
 );
 
+CREATE TABLE notificacao_encomenda (
+	notificacao_id INTEGER,
+	encomenda_id	 INTEGER NOT NULL,
+	PRIMARY KEY(notificacao_id)
+);
+
+CREATE TABLE notificacao_forum (
+	notificacao_id INTEGER,
+	forum_id	 INTEGER NOT NULL,
+	forum_num_post NUMERIC(8,2) NOT NULL,
+	PRIMARY KEY(notificacao_id)
+);
+
 CREATE TABLE notificacao_pessoa (
 	notificacao_id INTEGER,
 	pessoa_id	 INTEGER,
@@ -132,7 +138,7 @@ CREATE TABLE notificacao_pessoa (
 CREATE TABLE pessoa_forum (
 	pessoa_id	 INTEGER,
 	forum_id	 INTEGER,
-	forum_num_post SERIAL,
+	forum_num_post NUMERIC(8,2),
 	PRIMARY KEY(pessoa_id,forum_id,forum_num_post)
 );
 
@@ -147,14 +153,14 @@ ALTER TABLE comprador ADD CONSTRAINT comprador_fk1 FOREIGN KEY (pessoa_id) REFER
 ALTER TABLE encomenda ADD CONSTRAINT encomenda_fk1 FOREIGN KEY (comprador_pessoa_id) REFERENCES comprador(pessoa_id);
 ALTER TABLE rating ADD CONSTRAINT rating_fk1 FOREIGN KEY (comprador_pessoa_id) REFERENCES comprador(pessoa_id);
 ALTER TABLE rating ADD CONSTRAINT rating_fk2 FOREIGN KEY (produto_id, produto_num_versao) REFERENCES produto(id, num_versao);
-ALTER TABLE rating ADD CONSTRAINT rating_fk4 FOREIGN KEY (comprador_pessoa_id1) REFERENCES comprador(pessoa_id);
 ALTER TABLE forum ADD CONSTRAINT forum_fk1 FOREIGN KEY (forum_id, forum_num_post) REFERENCES forum(id, num_post);
 ALTER TABLE forum ADD CONSTRAINT forum_fk3 FOREIGN KEY (produto_id, produto_num_versao) REFERENCES produto(id, num_versao);
-ALTER TABLE notificacao ADD CONSTRAINT notificacao_fk1 FOREIGN KEY (rating_comprador_pessoa_id, rating_produto_id, rating_produto_num_versao) REFERENCES rating(comprador_pessoa_id, produto_id, produto_num_versao);
-ALTER TABLE notificacao ADD CONSTRAINT notificacao_fk4 FOREIGN KEY (encomenda_id) REFERENCES encomenda(id);
-ALTER TABLE notificacao ADD CONSTRAINT notificacao_fk5 FOREIGN KEY (forum_id, forum_num_post) REFERENCES forum(id, num_post);
 ALTER TABLE quantidade ADD CONSTRAINT quantidade_fk1 FOREIGN KEY (encomenda_id) REFERENCES encomenda(id);
 ALTER TABLE quantidade ADD CONSTRAINT quantidade_fk2 FOREIGN KEY (produto_id, produto_num_versao) REFERENCES produto(id, num_versao);
+ALTER TABLE notificacao_encomenda ADD CONSTRAINT notificacao_encomenda_fk1 FOREIGN KEY (notificacao_id) REFERENCES notificacao(id);
+ALTER TABLE notificacao_encomenda ADD CONSTRAINT notificacao_encomenda_fk2 FOREIGN KEY (encomenda_id) REFERENCES encomenda(id);
+ALTER TABLE notificacao_forum ADD CONSTRAINT notificacao_forum_fk1 FOREIGN KEY (notificacao_id) REFERENCES notificacao(id);
+ALTER TABLE notificacao_forum ADD CONSTRAINT notificacao_forum_fk2 FOREIGN KEY (forum_id, forum_num_post) REFERENCES forum(id, num_post);
 ALTER TABLE notificacao_pessoa ADD CONSTRAINT notificacao_pessoa_fk1 FOREIGN KEY (notificacao_id) REFERENCES notificacao(id);
 ALTER TABLE notificacao_pessoa ADD CONSTRAINT notificacao_pessoa_fk2 FOREIGN KEY (pessoa_id) REFERENCES pessoa(id);
 ALTER TABLE pessoa_forum ADD CONSTRAINT pessoa_forum_fk1 FOREIGN KEY (pessoa_id) REFERENCES pessoa(id);

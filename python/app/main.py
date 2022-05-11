@@ -1,7 +1,8 @@
+import ast
+
 import psycopg2, time
-import flask
 from flask import jsonify, request, Flask
-import logging
+import hmac, hashlib, base64, json  # token
 
 app = Flask(__name__)
 
@@ -10,6 +11,51 @@ StatusCodes = {
     'api_error': 400,
     'internal_error': 500
 }
+
+secret_key = '52d3f853c19f8b63c0918c126422aa2d99b1aef33ec63d41dea4fadf19406e54'
+
+
+def gera_token(payload):
+    payload = json.dumps(payload).encode()
+
+    # header
+    header = json.dumps({
+        'typ': 'JWT',
+        'alg': 'HS256'
+    }).encode()
+    b64_header = base64.urlsafe_b64encode(header).decode()
+
+    # payload
+    b64_payload = base64.urlsafe_b64encode(payload).decode()
+
+    # signature
+    signature = hmac.new(
+        key=secret_key.encode(),
+        msg=f'{b64_header}.{b64_payload}'.encode(),
+        digestmod=hashlib.sha256
+    ).digest()
+
+    jwt = f'{b64_header}.{b64_payload}.{base64.urlsafe_b64encode(signature).decode()}'
+    return jwt
+
+
+def descodifica_token(jwt):
+    b64_header, b64_payload, b64_signature = jwt.split('.')
+
+    b64_signature_checker = base64.urlsafe_b64encode(
+        hmac.new(
+            key=secret_key.encode(),
+            msg=f'{b64_header}.{b64_payload}'.encode(),
+            digestmod=hashlib.sha256
+        ).digest()
+    ).decode()
+
+    payload = json.loads(base64.urlsafe_b64decode(b64_payload))
+
+    if b64_signature_checker != b64_signature:
+        raise Exception('Assinatura inválida')
+
+    return payload
 
 
 ##########################################################
@@ -46,14 +92,14 @@ def landing_page():
     """
 
 
-#POST
-@app.route('/dbproj/user', methods=['POST'])
+# POST
+@app.route('/dbproj/user', methods=['POST']) #DONE
 def registaUtilizador():
     conn = db_connection()
     cur = conn.cursor()
 
     payload = request.get_json()
-    print(payload) #Print de todos os parametros passados pelo .json
+    print(payload)  # Print de todos os parametros passados pelo .json
 
     try:
         if "username" in payload and "password" in payload and "contacto" in payload:
@@ -66,7 +112,7 @@ def registaUtilizador():
             else:
                 email = "-"
 
-            if "cc" in payload and "morada" in payload: #Comprador
+            if "cc" in payload and "morada" in payload:  # Comprador
                 cc = payload["cc"]
                 morada = payload["morada"]
 
@@ -86,7 +132,6 @@ def registaUtilizador():
                 rows = cur.fetchall()
                 pessoa_id = int(rows[0][0])
 
-
                 querie = """INSERT INTO comprador(cc, morada, nif, pessoa_id) VALUES(%s, %s, %s, %s);"""
                 values = (cc, morada, nif, pessoa_id)
 
@@ -95,11 +140,20 @@ def registaUtilizador():
                 cur.execute("commit;")
 
                 content = {'status': StatusCodes['success'], 'results': pessoa_id}
-            elif "empresa" in payload and "nif" in payload and "morada" in payload: #Vendedor
+            elif "empresa" in payload and "nif" in payload and "morada" in payload:  # Vendedor
                 if "token" in payload:
                     token = payload["token"]
+                    print("ANTES: ", token)
 
-                    cur.execute("""SELECT count(*) FROM Administrador WHERE pessoa_id = %s;""", (token,))
+                    aux_payload = descodifica_token(token)
+                    print("DEPOIS: ", aux_payload)
+
+                    cur.execute("""SELECT id FROM Pessoa WHERE username = %s and password = %s;""",
+                                (aux_payload["username"], aux_payload["password"],))
+                    aux_rows = cur.fetchall()
+                    id = aux_rows[0][0]
+
+                    cur.execute("""SELECT count(*) FROM Administrador WHERE pessoa_id = %s;""", (id,))
                     rows = cur.fetchall()
                     count = int(rows[0][0])
 
@@ -121,7 +175,6 @@ def registaUtilizador():
                         rows = cur.fetchall()
                         pessoa_id = int(rows[0][0])
 
-
                         querie = """INSERT INTO vendedor(empresa, nif, morada, pessoa_id) VALUES(%s, %s, %s, %s);"""
                         values = (empresa, nif, morada, pessoa_id)
 
@@ -132,7 +185,7 @@ def registaUtilizador():
                         content = {'status': StatusCodes['success'], 'results': pessoa_id}
                 else:
                     content = {'results': 'invalid'}
-            elif "area" in payload: #Administrador
+            elif "area" in payload:  # Administrador
                 querie = """SELECT count(*) FROM Administrador;"""
                 cur.execute(querie);
 
@@ -154,7 +207,6 @@ def registaUtilizador():
                     rows = cur.fetchall()
                     pessoa_id = int(rows[0][0])
 
-
                     querie = """INSERT INTO administrador(area, pessoa_id) VALUES(%s, %s);"""
                     values = (area, pessoa_id)
 
@@ -166,8 +218,14 @@ def registaUtilizador():
                 else:
                     if "token" in payload:
                         token = payload["token"]
+                        aux_payload = descodifica_token(token)
 
-                        cur.execute("""SELECT count(*) FROM Administrador WHERE pessoa_id = %s;""", (token,))
+                        cur.execute("""SELECT id FROM Pessoa WHERE username = %s and password = %s;""",
+                                    (aux_payload["username"], aux_payload["password"],))
+                        aux_rows = cur.fetchall()
+                        id = aux_rows[0][0]
+
+                        cur.execute("""SELECT count(*) FROM Administrador WHERE pessoa_id = %s;""", (id,))
                         rows = cur.fetchall()
                         count = int(rows[0][0])
 
@@ -186,7 +244,6 @@ def registaUtilizador():
                             cur.execute("SELECT max(id) FROM pessoa;")
                             rows = cur.fetchall()
                             pessoa_id = int(rows[0][0])
-
 
                             querie = """INSERT INTO administrador(area, pessoa_id) VALUES(%s, %s);"""
                             values = (area, pessoa_id)
@@ -210,10 +267,9 @@ def registaUtilizador():
 
     return jsonify(content)
 
-#3 ponto
-#POST
-#TODO test
-@app.route('/dbproj/produto', methods=['POST'])
+
+# TODO meter as cenas da versao
+@app.route('/dbproj/produto', methods=['POST']) #POR TESTAR...
 def addProduto():
     conn = db_connection()
     cur = conn.cursor()
@@ -314,8 +370,118 @@ def addProduto():
 
     return jsonify(content)
 
-#PUT
-@app.route('/dbproj/user', methods=['PUT'])
+@app.route('/dbproj/order', methods=['POST']) #DONE
+def efetuaCompra():
+    conn = db_connection()
+    cur = conn.cursor()
+
+    payload = request.get_json()
+    print(payload)  # Print de todos os parametros passados pelo .json
+
+    try:
+        if "cart" in payload and "token" in payload:
+            token = payload["token"]
+            cart = payload["cart"]
+
+            aux_payload = descodifica_token(token)
+
+            # Verificar se é um Comprador, obtendo o ID da Pessoa
+            cur.execute("""SELECT pessoa_id 
+                            FROM Comprador 
+                            WHERE pessoa_id = (SELECT id FROM Pessoa WHERE username = %s and password = %s);""",
+                        (aux_payload["username"], aux_payload["password"],))
+            aux_rows = cur.fetchall()
+
+            if aux_rows == 0:
+                content = {'results': 'invalid'}
+            else:
+                pessoa_id = aux_rows[0][0]
+
+                if len(cart) == 0:
+                    content = {'results': 'invalid'}
+                else:
+                    #lista = ast.literal_eval(cart)
+                    lista = cart #devido à nova atualização do enunciado
+                    flag = False #Flag para inserir a encomenda assim que um par (produto_id, quantidade) seja válido
+                    encomendaId = 0 #Guardar o id da encomenda atual
+
+                    for i in range(len(lista)):
+                        produtoId = lista[i][0]
+                        quantidade = lista[i][1]
+
+                        cur.execute("""SELECT stock 
+                                        FROM Produto 
+                                        WHERE id = %s and num_versao = (SELECT max(num_versao) FROM Produto WHERE id = %s);""",
+                                    (produtoId, produtoId,))
+                        rows = cur.fetchall()
+                        if rows != 0:
+                            stock = rows[0][0]
+                            if stock >= quantidade:
+                                if not flag:
+                                    querie = """INSERT INTO encomenda(data, comprador_pessoa_id) VALUES(CURRENT_TIMESTAMP(0), %s);"""
+                                    values = (pessoa_id,)
+
+                                    cur.execute("BEGIN TRANSACTION;")
+                                    cur.execute(querie, values)
+                                    cur.execute("commit;")
+
+                                    cur.execute("""SELECT max(id) FROM encomenda""")
+                                    rows = cur.fetchall()
+                                    encomendaId = rows[0][0]
+                                    flag = True
+
+                                cur.execute("""SELECT max(num_versao) FROM Produto WHERE id = %s;""", (produtoId,))
+                                rows = cur.fetchall()
+                                numVersao = rows[0][0]
+
+                                #Inserir na tabela 'Quantidade'
+                                querie = """INSERT INTO quantidade(numero, encomenda_id, produto_id, produto_num_versao) 
+                                                VALUES(%s, %s, %s, %s);"""
+                                values = (quantidade, encomendaId, produtoId, numVersao,)
+
+                                cur.execute("BEGIN TRANSACTION;")
+                                cur.execute(querie, values)
+                                cur.execute("commit;")
+
+
+                                #Atualizar o stock produto na tabela 'Produto', inserindo um novo registo
+                                querie1 = """ SELECT marca, descricao, preco, vendedor_pessoa_id, titulo
+                                              FROM produto
+                                              WHERE produto.id = %s and produto.num_versao = %s;"""
+                                values = (produtoId, numVersao,)
+                                cur.execute(querie1, values)
+                                rows = cur.fetchall()
+                                versaoNova = numVersao + 1
+                                stockNovo = stock - quantidade
+                                marca = rows[0][0]
+                                descricao = rows[0][1]
+                                preco = rows[0][2]
+                                vendedor_pessoa_id = rows[0][3]
+                                titulo = rows[0][4]
+
+                                querie2 = """INSERT
+                                            INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id, produto_id, produto_num_versao)
+                                            VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP(0), %s, %s, %s)"""
+                                values = (produtoId, versaoNova, titulo, marca, stockNovo, descricao, preco, vendedor_pessoa_id, produtoId, numVersao)
+
+                                cur.execute("BEGIN TRANSACTION")
+                                cur.execute(querie2, values)
+                                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': encomendaId}
+        else:
+            content = {'results': 'invalid'}
+    except (Exception, psycopg2.DatabaseError) as error:
+        content = {'error:': str(error)}
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return jsonify(content)
+
+
+# PUT
+@app.route('/dbproj/user', methods=['PUT']) #DONE
 def autenticaUtilizador():
     conn = db_connection()
     cur = conn.cursor()
@@ -334,10 +500,10 @@ def autenticaUtilizador():
             rows = cur.fetchall()
 
             if (len(rows) > 0):
-                id = int(rows[0][0])
-                content = {'token': id}
+                token = gera_token(payload)
+                content = {'token': token}
             else:
-                content = {'results': 'there are not any person registered with this atributes'}
+                content = {'results': 'invalid'}
         else:
             content = {'results': 'invalid'}
     except (Exception, psycopg2.DatabaseError) as error:
@@ -348,9 +514,8 @@ def autenticaUtilizador():
 
     return jsonify(content)
 
-#PUT
-#TODO por agora kinda toda a gente pode editar, como é que raio é que fazemos com que so admins e o vendedor é que possa?
-@app.route('/dbproj/produto/<id>', methods=['PUT'])
+
+@app.route('/dbproj/produto/<id>', methods=['PUT']) #POR TESTAR...
 def atualizar_produto(id: str):
     if not id.isdigit():
         return jsonify({'error' : 'Invalid product Id was provided', 'code': StatusCodes['api_error']})
@@ -487,11 +652,9 @@ def atualizar_produto(id: str):
                                     VALUES
                                     """"""(%s, %s, %s, %s, %s, TIMESTAMP, %s)""""""
             values_update = ([id], payload["marca"], payload["stock"], payload["descricao"], payload["preco"], payload["produto_id"])
-
             cur.execute("BEGIN TRANSACTION")
             cur.execute(add_version_stmt, values_update)
             cur.execute("COMMIT")
-
             content = {'status': StatusCodes['success'], 'results': [id]}
             """
 
@@ -507,9 +670,8 @@ def atualizar_produto(id: str):
     return jsonify(content)
 
 
-#TODO adapt to also showcase the stuff from the subclasses
-#GET
-@app.route('/dbproj/produto/<produto_id>', methods=['GET'])
+# GET
+@app.route('/dbproj/produto/<produto_id>', methods=['GET']) #POR CONCLUIR...
 def detalhes_produto(produto_id: str):
     #logger.info(f"Detalhes e histórico para produto com id {produto_id}")
     if not produto_id.isdigit():
@@ -633,7 +795,10 @@ def detalhes_produto(produto_id: str):
 
     return jsonify(content)
 
-#MAIN
+
+
+
+# MAIN
 if __name__ == "__main__":
     time.sleep(1)  # just to let the DB start before this print :-)
 
