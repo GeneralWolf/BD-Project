@@ -370,6 +370,7 @@ def addProduto():
 
     return jsonify(content)
 
+
 @app.route('/dbproj/order', methods=['POST']) #DONE
 def efetuaCompra():
     conn = db_connection()
@@ -469,6 +470,89 @@ def efetuaCompra():
                                 cur.execute("COMMIT")
 
                 content = {'status': StatusCodes['success'], 'results': encomendaId}
+        else:
+            content = {'results': 'invalid'}
+    except (Exception, psycopg2.DatabaseError) as error:
+        content = {'error:': str(error)}
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return jsonify(content)
+
+
+@app.route('/dbproj/rating/<product_id>', methods=['POST'])
+def deixaRating(product_id):
+    conn = db_connection()
+    cur = conn.cursor()
+
+    payload = request.get_json()
+    print(payload)  # Print de todos os parametros passados pelo .json
+    print("product_id: ", product_id)
+
+    try:
+        if "rating" in payload and "comment" in payload and "token" in payload:
+            token = payload["token"]
+
+            aux_payload = descodifica_token(token)
+
+            # Verificar se é um Comprador, obtendo o ID da Pessoa
+            cur.execute("""SELECT pessoa_id 
+                            FROM Comprador 
+                            WHERE pessoa_id = (SELECT id FROM Pessoa WHERE username = %s and password = %s);""",
+                        (aux_payload["username"], aux_payload["password"],))
+            aux_rows = cur.fetchall()
+
+            if len(aux_rows) == 0:
+                content = {'results': 'invalid'}
+            else:
+                comment = payload["comment"]
+                rating = payload["rating"]
+                pessoa_id = aux_rows[0][0]
+
+                if rating >= 0 and rating <= 5:
+                    #Selecionar a "última" versão relativo à última compra do produto que estamos a considerar
+                    cur.execute("""SELECT max(produto_num_versao)
+                                    FROM quantidade
+                                    WHERE produto_id = %s;""", (product_id,))
+                    rows = cur.fetchall()
+                    versao = rows[0][0]
+
+                    #Ver se o comprador já fez um rating relativo à "última" versão do produto em questão
+                    cur.execute("""SELECT count(*)
+                                    FROM rating
+                                    WHERE comprador_pessoa_id = %s and produto_id = %s and produto_num_versao = %s""",
+                                (pessoa_id, product_id, versao,))
+                    rows = cur.fetchall()
+                    res1 = rows[0][0]
+
+                    if res1 == 0:
+                        #Ver se o comprador fez uma encomenda relativa à "última" versão do produto em questão
+                        cur.execute("""SELECT count(*)
+                                        FROM encomenda
+                                        WHERE comprador_pessoa_id = %s and encomenda.id = ( SELECT quantidade.encomenda_id 
+                                                                                            FROM quantidade
+                                                                                            WHERE quantidade.produto_id = %s and quantidade.produto_num_versao = %s);""",
+                                    (pessoa_id, product_id, versao,))
+                        rows = cur.fetchall()
+                        res2 = rows[0][0]
+
+                        if res2 == 1:
+                            querie = """INSERT INTO rating(classificacao, comentario, comprador_pessoa_id, produto_id, produto_num_versao) 
+                                        VALUES(%s, %s, %s, %s, %s);"""
+                            values = (rating, comment, pessoa_id, product_id, versao,)
+
+                            cur.execute("BEGIN TRANSACTION;")
+                            cur.execute(querie, values)
+                            cur.execute("commit;")
+
+                            content = {'status': StatusCodes['success']}
+                        else:
+                            content = {'results': 'you did not make the last buy of that product'}
+                    else:
+                        content = {'results': 'you already post a rating of the last version of that product'}
+                else:
+                    content = {'results': 'invalid rating'}
         else:
             content = {'results': 'invalid'}
     except (Exception, psycopg2.DatabaseError) as error:

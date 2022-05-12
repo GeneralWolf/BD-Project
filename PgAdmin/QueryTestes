@@ -25,3 +25,6 @@ VALUES (CURRENT_TIMESTAMP(0), 1);
 
 
 SELECT coalesce(max(id),0) FROM encomenda;
+
+
+select * from rating;
