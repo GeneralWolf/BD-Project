@@ -12,8 +12,8 @@ Passo a passo a inserir pelo postman:
 		2.3. SAMSUNG Galaxy A22 5G
 
 	3. Encomendas:
-		3.1. [[1, 2], [2, 1], [3,3]]
-		3.2. [[1, 4], [3, 1]]
+		3.1. [[1, 2], [2, 1], [3,3]] + username → Bernardo
+		3.2. [[1, 4], [3, 1]] + username → Afonso
 
 	4. Ratings:
 		4.1. product_id → 1  +  username → Afonso
