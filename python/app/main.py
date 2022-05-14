@@ -511,46 +511,49 @@ def deixaRating(product_id):
                 pessoa_id = aux_rows[0][0]
 
                 if rating >= 0 and rating <= 5:
-                    #Selecionar a "última" versão relativo à última compra do produto que estamos a considerar
-                    cur.execute("""SELECT max(produto_num_versao)
-                                    FROM quantidade
-                                    WHERE produto_id = %s;""", (product_id,))
+                    #Selecionar a última encomenda da pessoa em questão
+                    cur.execute("""SELECT coalesce(max(id),0) 
+									FROM encomenda
+									WHERE comprador_pessoa_id = %s""", (pessoa_id,))
                     rows = cur.fetchall()
-                    versao = rows[0][0]
+                    last_order = rows[0][0]
 
-                    #Ver se o comprador já fez um rating relativo à "última" versão do produto em questão
-                    cur.execute("""SELECT count(*)
-                                    FROM rating
-                                    WHERE comprador_pessoa_id = %s and produto_id = %s and produto_num_versao = %s""",
-                                (pessoa_id, product_id, versao,))
-                    rows = cur.fetchall()
-                    res1 = rows[0][0]
-
-                    if res1 == 0:
-                        #Ver se o comprador fez uma encomenda relativa à "última" versão do produto em questão
-                        cur.execute("""SELECT count(*)
-                                        FROM encomenda
-                                        WHERE comprador_pessoa_id = %s and encomenda.id = ( SELECT quantidade.encomenda_id 
-                                                                                            FROM quantidade
-                                                                                            WHERE quantidade.produto_id = %s and quantidade.produto_num_versao = %s);""",
-                                    (pessoa_id, product_id, versao,))
+                    #A pessoa em questão já fez pelo menos uma encomenda
+                    if last_order != 0:
+                        cur.execute("""SELECT produto_num_versao
+                                        FROM quantidade
+                                        WHERE produto_id = %s and encomenda_id = %s;""",
+                                    (product_id, last_order,))
                         rows = cur.fetchall()
-                        res2 = rows[0][0]
+                        
+                        #O produto em questão está presente na última encomenda
+                        if len(rows) != 0:
+                            versao = rows[0][0]
 
-                        if res2 == 1:
-                            querie = """INSERT INTO rating(classificacao, comentario, comprador_pessoa_id, produto_id, produto_num_versao) 
-                                        VALUES(%s, %s, %s, %s, %s);"""
-                            values = (rating, comment, pessoa_id, product_id, versao,)
+                            #Ver se o comprador já fez um rating relativo ao produto em questão presente na última encomenda do mesmo
+                            cur.execute("""SELECT count(*)
+                                            FROM rating
+                                            WHERE comprador_pessoa_id = %s and produto_id = %s and produto_num_versao = %s""",
+                                        (pessoa_id, product_id, versao,))
+                            rows = cur.fetchall()
+                            res1 = rows[0][0]
 
-                            cur.execute("BEGIN TRANSACTION;")
-                            cur.execute(querie, values)
-                            cur.execute("commit;")
+                            if res1 == 0:
+                                querie = """INSERT INTO rating(classificacao, comentario, comprador_pessoa_id, produto_id, produto_num_versao) 
+                                            VALUES(%s, %s, %s, %s, %s);"""
+                                values = (rating, comment, pessoa_id, product_id, versao,)
 
-                            content = {'status': StatusCodes['success']}
+                                cur.execute("BEGIN TRANSACTION;")
+                                cur.execute(querie, values)
+                                cur.execute("commit;")
+
+                                content = {'status': StatusCodes['success']}
+                            else:
+                                content = {'results': 'considering your last order, you already post a rating of that product'}
                         else:
-                            content = {'results': 'you did not make the last buy of that product'}
+                            content = {'results': 'your last order does not contain the product that you selected'}
                     else:
-                        content = {'results': 'you already post a rating of the last version of that product'}
+                        content = {'results': 'you have not done yet any order'}
                 else:
                     content = {'results': 'invalid rating'}
         else:
