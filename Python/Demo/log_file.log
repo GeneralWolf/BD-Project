@@ -4,3 +4,15 @@ WARNING:werkzeug: * Debugger is active!
 INFO:werkzeug: * Debugger PIN: 145-355-376
 INFO:logger:API v1.1 online: http://127.0.0.1:8080
 INFO:logger:API v1.1 online: http://127.0.0.1:8080
+INFO:werkzeug: * Running on http://127.0.0.1:8080 (Press CTRL+C to quit)
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 145-355-376
+INFO:logger:API v1.1 online: http://127.0.0.1:8080
+INFO:logger:API v1.1 online: http://127.0.0.1:8080
+INFO:werkzeug: * Running on http://127.0.0.1:8080 (Press CTRL+C to quit)
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 145-355-376
+INFO:logger:API v1.1 online: http://127.0.0.1:8080
+INFO:logger:API v1.1 online: http://127.0.0.1:8080

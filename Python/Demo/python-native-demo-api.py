@@ -1,27 +1,11 @@
-##
-## =============================================
-## ============== Bases de Dados ===============
-## ============== LEI  2021/2022 ===============
-## =============================================
-## =================== Demo ====================
-## =============================================
-## =============================================
-## === Department of Informatics Engineering ===
-## =========== University of Coimbra ===========
-## =============================================
-##
-## Authors:
-##   Nuno Antunes <nmsa@dei.uc.pt>
-##   BD 2022 Team - https://dei.uc.pt/lei/
-##   University of Coimbra
+import ast
 
-
-import flask
-import logging
 import psycopg2
 import time
+from flask import jsonify, request, Flask
+import hmac, hashlib, base64, json  # token
 
-app = flask.Flask(__name__)
+app = Flask(__name__)
 
 StatusCodes = {
     'success': 200,
@@ -29,364 +13,878 @@ StatusCodes = {
     'internal_error': 500
 }
 
+secret_key = '52d3f853c19f8b63c0918c126422aa2d99b1aef33ec63d41dea4fadf19406e54'
+
+
+def gera_token(payload):
+    payload = json.dumps(payload).encode()
+
+    # header
+    header = json.dumps({
+        'typ': 'JWT',
+        'alg': 'HS256'
+    }).encode()
+    b64_header = base64.urlsafe_b64encode(header).decode()
+
+    # payload
+    b64_payload = base64.urlsafe_b64encode(payload).decode()
+
+    # signature
+    signature = hmac.new(
+        key=secret_key.encode(),
+        msg=f'{b64_header}.{b64_payload}'.encode(),
+        digestmod=hashlib.sha256
+    ).digest()
+
+    jwt = f'{b64_header}.{b64_payload}.{base64.urlsafe_b64encode(signature).decode()}'
+    return jwt
+
+
+def descodifica_token(jwt):
+    b64_header, b64_payload, b64_signature = jwt.split('.')
+
+    b64_signature_checker = base64.urlsafe_b64encode(
+        hmac.new(
+            key=secret_key.encode(),
+            msg=f'{b64_header}.{b64_payload}'.encode(),
+            digestmod=hashlib.sha256
+        ).digest()
+    ).decode()
+
+    payload = json.loads(base64.urlsafe_b64decode(b64_payload))
+
+    if b64_signature_checker != b64_signature:
+        raise Exception('Assinatura inválida')
+
+    return payload
+
+
 ##########################################################
-## DATABASE ACCESS
+# DATABASE ACCESS
 ##########################################################
 
 def db_connection():
     db = psycopg2.connect(
-        user='aulaspl',
-        password='aulaspl',
-        host='127.0.0.1',
-        port='5432',
-        database='dbfichas'
+        user="postgres",
+        password="postgres",
+        host="localhost",
+        port="5432",
+        database="postgres"
     )
 
     return db
 
 
-
-
 ##########################################################
-## ENDPOINTS
+# ENDPOINTS
 ##########################################################
 
-#TODO remove old examples later
-"""
-@app.route('/') 
+
+@app.route('/')
 def landing_page():
     return """
-"""
-    Hello World (Python Native)!  <br/>
+
+    Hello World (Python)!  <br/>
     <br/>
     Check the sources for instructions on how to use the endpoints!<br/>
     <br/>
     BD 2022 Team<br/>
     <br/>
     """
-"""
 
-##
-## Demo GET
-##
-## Obtain all departments in JSON format
-##
-## To use it, access: 
-## 
-## http://localhost:8080/departments/
-##
 
-@app.route('/departments/', methods=['GET'])
-def get_all_departments():
-    logger.info('GET /departments')
-
+# POST
+@app.route('/dbproj/user', methods=['POST']) #DONE
+def registaUtilizador():
     conn = db_connection()
     cur = conn.cursor()
 
+    payload = request.get_json()
+    print(payload)  # Print de todos os parametros passados pelo .json
+
     try:
-        cur.execute('SELECT ndep, nome, local FROM dep')
-        rows = cur.fetchall()
+        if "username" in payload and "password" in payload and "contacto" in payload:
+            username = payload["username"]
+            password = payload["password"]
+            contacto = payload["contacto"]
 
-        logger.debug('GET /departments - parse')
-        Results = []
-        for row in rows:
-            logger.debug(row)
-            content = {'ndep': int(row[0]), 'nome': row[1], 'localidade': row[2]}
-            Results.append(content)  # appending to the payload to be returned
+            if "email" in payload:
+                email = payload["email"]
+            else:
+                email = "-"
 
-        response = {'status': StatusCodes['success'], 'results': Results}
+            if "cc" in payload and "morada" in payload:  # Comprador
+                cc = payload["cc"]
+                morada = payload["morada"]
 
+                if "nif" in payload:
+                    nif = payload["nif"]
+                else:
+                    nif = "-"
+
+                querie = """INSERT INTO pessoa(username, password, contacto, email) VALUES(%s, %s, %s, %s);"""
+                values = (username, password, contacto, email)
+
+                cur.execute("BEGIN TRANSACTION;")
+                cur.execute(querie, values)
+                cur.execute("commit;")
+
+                cur.execute("SELECT max(id) FROM pessoa;")
+                rows = cur.fetchall()
+                pessoa_id = int(rows[0][0])
+
+                querie = """INSERT INTO comprador(cc, morada, nif, pessoa_id) VALUES(%s, %s, %s, %s);"""
+                values = (cc, morada, nif, pessoa_id)
+
+                cur.execute("BEGIN TRANSACTION;")
+                cur.execute(querie, values)
+                cur.execute("commit;")
+
+                content = {'status': StatusCodes['success'], 'results': pessoa_id}
+            elif "empresa" in payload and "nif" in payload and "morada" in payload:  # Vendedor
+                if "token" in payload:
+                    token = payload["token"]
+                    print("ANTES: ", token)
+
+                    aux_payload = descodifica_token(token)
+                    print("DEPOIS: ", aux_payload)
+
+                    cur.execute("""SELECT id FROM Pessoa WHERE username = %s and password = %s;""",
+                                (aux_payload["username"], aux_payload["password"],))
+                    aux_rows = cur.fetchall()
+                    id = aux_rows[0][0]
+
+                    cur.execute("""SELECT count(*) FROM Administrador WHERE pessoa_id = %s;""", (id,))
+                    rows = cur.fetchall()
+                    count = int(rows[0][0])
+
+                    if count == 0:
+                        content = {'results': 'invalid'}
+                    else:
+                        empresa = payload["empresa"]
+                        nif = payload["nif"]
+                        morada = payload["morada"]
+
+                        querie = """INSERT INTO pessoa(username, password, contacto, email) VALUES(%s, %s, %s, %s);"""
+                        values = (username, password, contacto, email)
+
+                        cur.execute("BEGIN TRANSACTION;")
+                        cur.execute(querie, values)
+                        cur.execute("commit;")
+
+                        cur.execute("SELECT max(id) FROM pessoa;")
+                        rows = cur.fetchall()
+                        pessoa_id = int(rows[0][0])
+
+                        querie = """INSERT INTO vendedor(empresa, nif, morada, pessoa_id) VALUES(%s, %s, %s, %s);"""
+                        values = (empresa, nif, morada, pessoa_id)
+
+                        cur.execute("BEGIN TRANSACTION;")
+                        cur.execute(querie, values)
+                        cur.execute("commit;")
+
+                        content = {'status': StatusCodes['success'], 'results': pessoa_id}
+                else:
+                    content = {'results': 'invalid'}
+            elif "area" in payload:  # Administrador
+                querie = """SELECT count(*) FROM Administrador;"""
+                cur.execute(querie);
+
+                rows = cur.fetchall()
+                num = int(rows[0][0])
+                print("Numero de admins: ", num);
+
+                if num == 0:
+                    area = payload["area"]
+
+                    querie = """INSERT INTO pessoa(username, password, contacto, email) VALUES(%s, %s, %s, %s);"""
+                    values = (username, password, contacto, email)
+
+                    cur.execute("BEGIN TRANSACTION;")
+                    cur.execute(querie, values)
+                    cur.execute("commit;")
+
+                    cur.execute("SELECT max(id) FROM pessoa;")
+                    rows = cur.fetchall()
+                    pessoa_id = int(rows[0][0])
+
+                    querie = """INSERT INTO administrador(area, pessoa_id) VALUES(%s, %s);"""
+                    values = (area, pessoa_id)
+
+                    cur.execute("BEGIN TRANSACTION;")
+                    cur.execute(querie, values)
+                    cur.execute("commit;")
+
+                    content = {'status': StatusCodes['success'], 'results': pessoa_id}
+                else:
+                    if "token" in payload:
+                        token = payload["token"]
+                        aux_payload = descodifica_token(token)
+
+                        cur.execute("""SELECT id FROM Pessoa WHERE username = %s and password = %s;""",
+                                    (aux_payload["username"], aux_payload["password"],))
+                        aux_rows = cur.fetchall()
+                        id = aux_rows[0][0]
+
+                        cur.execute("""SELECT count(*) FROM Administrador WHERE pessoa_id = %s;""", (id,))
+                        rows = cur.fetchall()
+                        count = int(rows[0][0])
+
+                        if count == 0:
+                            content = {'results': 'invalid'}
+                        else:
+                            area = payload["area"]
+
+                            querie = """INSERT INTO pessoa(username, password, contacto, email) VALUES(%s, %s, %s, %s);"""
+                            values = (username, password, contacto, email)
+
+                            cur.execute("BEGIN TRANSACTION;")
+                            cur.execute(querie, values)
+                            cur.execute("commit;")
+
+                            cur.execute("SELECT max(id) FROM pessoa;")
+                            rows = cur.fetchall()
+                            pessoa_id = int(rows[0][0])
+
+                            querie = """INSERT INTO administrador(area, pessoa_id) VALUES(%s, %s);"""
+                            values = (area, pessoa_id)
+
+                            cur.execute("BEGIN TRANSACTION;")
+                            cur.execute(querie, values)
+                            cur.execute("commit;")
+
+                            content = {'status': StatusCodes['success'], 'results': pessoa_id}
+                    else:
+                        content = {'results': 'invalid'}
+            else:
+                content = {'results': 'invalid'}
+        else:
+            content = {'results': 'invalid'}
     except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(f'GET /departments - error: {error}')
-        response = {'status': StatusCodes['internal_error'], 'errors': str(error)}
-
+        content = {'error:': str(error)}
     finally:
         if conn is not None:
             conn.close()
 
-    return flask.jsonify(response)
+    return jsonify(content)
 
 
-##
-## Demo GET
-##
-## Obtain department with ndep <ndep>
-##
-## To use it, access: 
-## 
-## http://localhost:8080/departments/10
-##
-
-@app.route('/departments/<ndep>/', methods=['GET'])
-def get_department(ndep):
-    logger.info('GET /departments/<ndep>')
-
-    logger.debug(f'ndep: {ndep}')
-
+# TODO meter as cenas da versao
+@app.route('/dbproj/produto', methods=['POST']) #POR TESTAR...
+def addProduto():
     conn = db_connection()
     cur = conn.cursor()
+
+    payload = request.get_json()
+    print(payload) #Print de todos os parametros passados pelo .json
 
     try:
-        cur.execute('SELECT ndep, nome, local FROM dep where ndep = %s', (ndep,))
-        rows = cur.fetchall()
+        if "id" in payload and "marca" in payload and "stock" in payload and "vendedor_pessoa_id" in payload and "preco" in payload:
+            id = payload["id"]
+            marca = payload["marca"]
+            stock = payload["stock"]
+            vendedor_id = payload["vendedor_pessoa_id"]
+            preco = payload["preco"]
 
-        row = rows[0]
+            if ("descricao" in payload):
+                descricao = payload["descricao"]
+            else:
+                descricao = "-"
 
-        logger.debug('GET /departments/<ndep> - parse')
-        logger.debug(row)
-        content = {'ndep': int(row[0]), 'nome': row[1], 'localidade': row[2]}
-
-        response = {'status': StatusCodes['success'], 'results': content}
-
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(f'GET /departments/<ndep> - error: {error}')
-        response = {'status': StatusCodes['internal_error'], 'errors': str(error)}
-
-    finally:
-        if conn is not None:
-            conn.close()
-
-    return flask.jsonify(response)
+            query = """ INSERT INTO 
+                        produto(id, marca, stock, vendedor_pessoa_id, descricao, preco, data, produto_num_versao)
+                        VALUES
+                        (%s, %s, %s, %s, %s, %s, TIMESTAMP, %s)"""
+            values = (id, marca, stock, vendedor_id, descricao, preco, 1)
 
 
-##
-## Demo POST
-##
-## Add a new department in a JSON payload
-##
-## To use it, you need to use postman or curl: 
-##
-## curl -X POST http://localhost:8080/departments/ -H 'Content-Type: application/json' -d '{'localidade': 'Polo II', 'ndep': 69, 'nome': 'Seguranca'}'
-##
+            cur.execute("BEGIN TRANSACTION")
+            cur.execute(query, values)
+            cur.execute("COMMIT")
 
-@app.route('/departments/', methods=['POST'])
-def add_departments():
-    logger.info('POST /departments')
-    payload = flask.request.get_json()
 
-    conn = db_connection()
-    cur = conn.cursor()
+            if("processador" in payload and "sistema_operativo" in payload and "armazenamento" in payload and "camara" in payload):
 
-    logger.debug(f'POST /departments - payload: {payload}')
+                processador = payload["processador"]
+                sistema_operativo = payload["sistema_operativo"]
+                armazenamento = payload["armazenamento"]
+                camara = payload["camara"]
 
-    # do not forget to validate every argument, e.g.,:
-    if 'ndep' not in payload:
-        response = {'status': StatusCodes['api_error'], 'results': 'ndep value not in payload'}
-        return flask.jsonify(response)
-
-    # parameterized queries, good for security and performance
-    statement = 'INSERT INTO dep (ndep, nome, local) VALUES (%s, %s, %s)'
-    values = (payload['ndep'], payload['localidade'], payload['nome'])
-
-    try:
-        cur.execute(statement, values)
-
-        # commit the transaction
-        conn.commit()
-        response = {'status': StatusCodes['success'], 'results': f'Inserted dep {payload["ndep"]}'}
-
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(f'POST /departments - error: {error}')
-        response = {'status': StatusCodes['internal_error'], 'errors': str(error)}
-
-        # an error occurred, rollback
-        conn.rollback()
-
-    finally:
-        if conn is not None:
-            conn.close()
-
-    return flask.jsonify(response)
-
-##
-## Demo PUT
-##
-## Update a department based on a JSON payload
-##
-## To use it, you need to use postman or curl: 
-##
-## curl -X PUT http://localhost:8080/departments/ -H 'Content-Type: application/json' -d '{'ndep': 69, 'localidade': 'Porto'}'
-##
-
-@app.route('/departments/<ndep>', methods=['PUT'])
-def update_departments(ndep):
-    logger.info('PUT /departments/<ndep>')
-    payload = flask.request.get_json()
-
-    conn = db_connection()
-    cur = conn.cursor()
-
-    logger.debug(f'PUT /departments/<ndep> - payload: {payload}')
-
-    # do not forget to validate every argument, e.g.,:
-    if 'localidade' not in payload:
-        response = {'status': StatusCodes['api_error'], 'results': 'localidade is required to update'}
-        return flask.jsonify(response)
-
-    # parameterized queries, good for security and performance
-    statement = 'UPDATE dep SET local = %s WHERE ndep = %s'
-    values = (payload['localidade'], ndep)
-
-    try:
-        res = cur.execute(statement, values)
-        response = {'status': StatusCodes['success'], 'results': f'Updated: {cur.rowcount}'}
-
-        # commit the transaction
-        conn.commit()
-
-    except (Exception, psycopg2.DatabaseError) as error:
-        logger.error(error)
-        response = {'status': StatusCodes['internal_error'], 'errors': str(error)}
-
-        # an error occurred, rollback
-        conn.rollback()
-
-    finally:
-        if conn is not None:
-            conn.close()
-
-    return flask.jsonify(response)
-"""
-
-#TODO cant fucking use produto if inserting another table, can I?
-#TODO wait no i kinda can i believe
-#TODO still not sure if the endpoint should be produto
-@app.route('/produto/', methods=['POST'])
-def add_produto():
-    logger.info('POST /produto')
-    payload = flask.request.get_json()
-
-    conn = db_connection()
-    cur = conn.cursor()
-
-    logger.debug(f'POST /produto - payload: {payload}')
-
-    # do not forget to validate every argument, e.g.,:
-    if 'produto_id' not in payload:
-        response = {'status': StatusCodes['api_error'], 'results': 'produto_id value not in payload'}
-        return flask.jsonify(response)
-
-    #TODO check if better way to do this
-    #TODO update description and price on table versao
-    if(payload['tipo'] == 'computador'):
-        comp_create_stmt = """INSERT INTO computador
-                    (processador, sistema_operativo, armazenamento, camara, produto_id, produto_marca, produto_stock, produto_vendedor)
-                   VALUES
-                    (%s, %s, %s, %s, %d, %s, %d, %d)"""
-        values_comp = (payload['processador'], payload['sistema_operativo'], payload['armazenamento'], payload['camara'], payload['produto_id'], payload['produto_marca'], payload['produto_stock'], payload['produto_vendedor'])
-
-        #TODO trying to also add the versao table part
-        #TODO also why is the version product id still have smartphone in the name???
-        version_create_stmt = """INSERT INTO versao
-                            (descricao, preco, data_alteracao, smartphone_produto_id)
+                query2 = """ INSERT INTO
+                            computador(processador, sistema_operativo, armazenamento, camara, produto_id, produto_num_versao)
                             VALUES
-                            (%s, %f, TIMESTAMP, %d)
+                            (%s, %s, %s, %s, %s)"""
+                values2 = (processador, sistema_operativo, armazenamento, camara, id, 1)
+
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(query2, values2)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': id}
+
+            elif("comprimento" in payload and "largura" in payload and "peso" in payload and "resolucao" in payload):
+
+                comprimento = payload["comprimento"]
+                largura = payload["largura"]
+                peso = payload["peso"]
+                resolucao = payload["resolucao"]
+
+
+                query2 = """INSERT INTO
+                            televisor(comprimento, largura, peso, resolucao, produto_id, produto_num_versao)
+                            VALUES
+                            (%s, %s, %s, %s, %s, %s)"""
+                values2 = (comprimento, largura, peso, resolucao, id, 1)
+
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(query2, values2)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': id}
+
+            elif("modelo" in payload and "cor" in payload):
+
+                modelo = payload["modelo"]
+                cor = payload["cor"]
+
+                query2 = """INSERT INTO
+                            smartphone(modelo, cor, produto_id, produto_num_versao)
+                            VALUES
+                            (%s, %s, %s, %s)"""
+                values2 = (modelo, cor, id, 1)
+
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(query2, values2)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': id}
+
+            else:
+                content = {'results': 'invalid'}
+        else:
+            content = {'results': 'invalid'}
+    except (Exception, psycopg2.DatabaseError) as error:
+        content = {'error:': str(error)}
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return jsonify(content)
+
+
+@app.route('/dbproj/order', methods=['POST']) #DONE
+def efetuaCompra():
+    conn = db_connection()
+    cur = conn.cursor()
+
+    payload = request.get_json()
+    print(payload)  # Print de todos os parametros passados pelo .json
+
+    try:
+        if "cart" in payload and "token" in payload:
+            token = payload["token"]
+            cart = payload["cart"]
+
+            aux_payload = descodifica_token(token)
+
+            # Verificar se é um Comprador, obtendo o ID da Pessoa
+            cur.execute("""SELECT pessoa_id 
+                            FROM Comprador 
+                            WHERE pessoa_id = (SELECT id FROM Pessoa WHERE username = %s and password = %s);""",
+                        (aux_payload["username"], aux_payload["password"],))
+            aux_rows = cur.fetchall()
+
+            if aux_rows == 0:
+                content = {'results': 'invalid'}
+            else:
+                pessoa_id = aux_rows[0][0]
+
+                if len(cart) == 0:
+                    content = {'results': 'invalid'}
+                else:
+                    #lista = ast.literal_eval(cart)
+                    lista = cart #devido à nova atualização do enunciado
+                    flag = False #Flag para inserir a encomenda assim que um par (produto_id, quantidade) seja válido
+                    encomendaId = 0 #Guardar o id da encomenda atual
+
+                    for i in range(len(lista)):
+                        produtoId = lista[i][0]
+                        quantidade = lista[i][1]
+
+                        cur.execute("""SELECT stock 
+                                        FROM Produto 
+                                        WHERE id = %s and num_versao = (SELECT max(num_versao) FROM Produto WHERE id = %s);""",
+                                    (produtoId, produtoId,))
+                        rows = cur.fetchall()
+                        if rows != 0:
+                            stock = rows[0][0]
+                            if stock >= quantidade:
+                                if not flag:
+                                    querie = """INSERT INTO encomenda(data, comprador_pessoa_id) VALUES(CURRENT_TIMESTAMP(0), %s);"""
+                                    values = (pessoa_id,)
+
+                                    cur.execute("BEGIN TRANSACTION;")
+                                    cur.execute(querie, values)
+                                    cur.execute("commit;")
+
+                                    cur.execute("""SELECT max(id) FROM encomenda""")
+                                    rows = cur.fetchall()
+                                    encomendaId = rows[0][0]
+                                    flag = True
+
+                                cur.execute("""SELECT max(num_versao) FROM Produto WHERE id = %s;""", (produtoId,))
+                                rows = cur.fetchall()
+                                numVersao = rows[0][0]
+
+                                #Inserir na tabela 'Quantidade'
+                                querie = """INSERT INTO quantidade(numero, encomenda_id, produto_id, produto_num_versao) 
+                                                VALUES(%s, %s, %s, %s);"""
+                                values = (quantidade, encomendaId, produtoId, numVersao,)
+
+                                cur.execute("BEGIN TRANSACTION;")
+                                cur.execute(querie, values)
+                                cur.execute("commit;")
+
+
+                                #Atualizar o stock produto na tabela 'Produto', inserindo um novo registo
+                                querie1 = """ SELECT marca, descricao, preco, vendedor_pessoa_id, titulo
+                                              FROM produto
+                                              WHERE produto.id = %s and produto.num_versao = %s;"""
+                                values = (produtoId, numVersao,)
+                                cur.execute(querie1, values)
+                                rows = cur.fetchall()
+                                versaoNova = numVersao + 1
+                                stockNovo = stock - quantidade
+                                marca = rows[0][0]
+                                descricao = rows[0][1]
+                                preco = rows[0][2]
+                                vendedor_pessoa_id = rows[0][3]
+                                titulo = rows[0][4]
+
+                                querie2 = """INSERT
+                                            INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id, produto_id, produto_num_versao)
+                                            VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP(0), %s, %s, %s)"""
+                                values = (produtoId, versaoNova, titulo, marca, stockNovo, descricao, preco, vendedor_pessoa_id, produtoId, numVersao)
+
+                                cur.execute("BEGIN TRANSACTION")
+                                cur.execute(querie2, values)
+                                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': encomendaId}
+        else:
+            content = {'results': 'invalid'}
+    except (Exception, psycopg2.DatabaseError) as error:
+        content = {'error:': str(error)}
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return jsonify(content)
+
+
+@app.route('/dbproj/rating/<product_id>', methods=['POST'])
+def deixaRating(product_id):
+    conn = db_connection()
+    cur = conn.cursor()
+
+    payload = request.get_json()
+    print(payload)  # Print de todos os parametros passados pelo .json
+    print("product_id: ", product_id)
+
+    try:
+        if "rating" in payload and "comment" in payload and "token" in payload:
+            token = payload["token"]
+
+            aux_payload = descodifica_token(token)
+
+            # Verificar se é um Comprador, obtendo o ID da Pessoa
+            cur.execute("""SELECT pessoa_id 
+                            FROM Comprador 
+                            WHERE pessoa_id = (SELECT id FROM Pessoa WHERE username = %s and password = %s);""",
+                        (aux_payload["username"], aux_payload["password"],))
+            aux_rows = cur.fetchall()
+
+            if len(aux_rows) == 0:
+                content = {'results': 'invalid'}
+            else:
+                comment = payload["comment"]
+                rating = payload["rating"]
+                pessoa_id = aux_rows[0][0]
+
+                if rating >= 0 and rating <= 5:
+                    #Selecionar a "última" versão relativo à última compra do produto que estamos a considerar
+                    cur.execute("""SELECT max(produto_num_versao)
+                                    FROM quantidade
+                                    WHERE produto_id = %s;""", (product_id,))
+                    rows = cur.fetchall()
+                    versao = rows[0][0]
+
+                    #Ver se o comprador já fez um rating relativo à "última" versão do produto em questão
+                    cur.execute("""SELECT count(*)
+                                    FROM rating
+                                    WHERE comprador_pessoa_id = %s and produto_id = %s and produto_num_versao = %s""",
+                                (pessoa_id, product_id, versao,))
+                    rows = cur.fetchall()
+                    res1 = rows[0][0]
+
+                    if res1 == 0:
+                        #Ver se o comprador fez uma encomenda relativa à "última" versão do produto em questão
+                        cur.execute("""SELECT count(*)
+                                        FROM encomenda
+                                        WHERE comprador_pessoa_id = %s and encomenda.id = ( SELECT quantidade.encomenda_id 
+                                                                                            FROM quantidade
+                                                                                            WHERE quantidade.produto_id = %s and quantidade.produto_num_versao = %s);""",
+                                    (pessoa_id, product_id, versao,))
+                        rows = cur.fetchall()
+                        res2 = rows[0][0]
+
+                        if res2 == 1:
+                            querie = """INSERT INTO rating(classificacao, comentario, comprador_pessoa_id, produto_id, produto_num_versao) 
+                                        VALUES(%s, %s, %s, %s, %s);"""
+                            values = (rating, comment, pessoa_id, product_id, versao,)
+
+                            cur.execute("BEGIN TRANSACTION;")
+                            cur.execute(querie, values)
+                            cur.execute("commit;")
+
+                            content = {'status': StatusCodes['success']}
+                        else:
+                            content = {'results': 'you did not make the last buy of that product'}
+                    else:
+                        content = {'results': 'you already post a rating of the last version of that product'}
+                else:
+                    content = {'results': 'invalid rating'}
+        else:
+            content = {'results': 'invalid'}
+    except (Exception, psycopg2.DatabaseError) as error:
+        content = {'error:': str(error)}
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return jsonify(content)
+
+
+# PUT
+@app.route('/dbproj/user', methods=['PUT']) #DONE
+def autenticaUtilizador():
+    conn = db_connection()
+    cur = conn.cursor()
+
+    payload = request.get_json()
+
+    try:
+        if "username" in payload and "password" in payload:
+            username = payload["username"]
+            password = payload["password"]
+
+            querie = """SELECT id FROM pessoa WHERE pessoa.username = %s AND pessoa.password = %s;"""
+            values = (username, password)
+
+            cur.execute(querie, values)
+            rows = cur.fetchall()
+
+            if (len(rows) > 0):
+                token = gera_token(payload)
+                content = {'token': token}
+            else:
+                content = {'results': 'invalid'}
+        else:
+            content = {'results': 'invalid'}
+    except (Exception, psycopg2.DatabaseError) as error:
+        content = {'error:': str(error)}
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return jsonify(content)
+
+
+@app.route('/dbproj/produto/<id>', methods=['PUT']) #POR TESTAR...
+def atualizar_produto(id: str):
+    if not id.isdigit():
+        return jsonify({'error' : 'Invalid product Id was provided', 'code': StatusCodes['api_error']})
+
+    conn = db_connection()
+    cur = conn.cursor()
+
+    payload = request.get_json()
+
+    try:
+        find_product_stmt = """ SELECT id
+                                FROM produto
+                                WHERE produto.id = %s;"""
+        cur.execute(find_product_stmt, [id])
+        rows = cur.fetchall()
+        if(rows.len() > 0):
+
+            versions = list()
+            #find max version since through sql seems ill have to use cursors
+            for row in rows:
+                versions.append(row[1])
+                titulo = row[2]
+                marca = row[3]
+                stock = row[4]
+                descricao = row[5]
+                preco = row[6]
+                vendedor_pessoa_id = row[10]
+
+            new_ver = int(max(versions)) + 1
+
+
+            if("stock" in payload and "preco" in payload and "descricao" in payload):   #vem com tudo   #TODO nao adicionei produto_id porque o jo tirou
+                add_version_stmt = """  INSERT
+                                        INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
+                                        VALUES
+                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
+                values_update = ([id], new_ver, titulo, marca, payload["stock"], payload["descricao"], payload["preco"],vendedor_pessoa_id)
+
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(add_version_stmt, values_update)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': [id]}
+
+            elif("stock" in payload and "preco" in payload and "descricao" not in payload): #nao vem com descricao
+                add_version_stmt = """  INSERT
+                                        INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
+                                        VALUES
+                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
+                values_update = ([id], new_ver, titulo, marca, payload["stock"], descricao, payload["preco"], vendedor_pessoa_id)
+
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(add_version_stmt, values_update)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': [id]}
+
+            elif("stock" in payload and "preco" not in payload and "descricao" in payload): #nao vem com preço
+                add_version_stmt = """  INSERT
+                                        INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
+                                        VALUES
+                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
+                values_update = ([id], new_ver, titulo, marca, payload["stock"], payload["descricao"], preco, vendedor_pessoa_id)
+
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(add_version_stmt, values_update)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': [id]}
+
+            elif("stock" in payload and "preco" not in payload and "descricao" not in payload): #so vem com stock
+                add_version_stmt = """  INSERT
+                                        INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
+                                        VALUES
+                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
+                values_update = (
+                [id], new_ver, titulo, marca, payload["stock"], descricao, preco, vendedor_pessoa_id)
+
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(add_version_stmt, values_update)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': [id]}
+
+            elif("stock" not in payload and "preco" in payload and "descricao" in payload): #nao vem com stock
+                add_version_stmt = """  INSERT
+                                        INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
+                                        VALUES
+                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
+                values_update = (
+                    [id], new_ver, titulo, marca, stock, payload["descricao"], payload["preco"], vendedor_pessoa_id)
+
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(add_version_stmt, values_update)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': [id]}
+
+            elif ("stock" not in payload and "preco" in payload and "descricao" not in payload): #so vem com preço
+                add_version_stmt = """  INSERT
+                                        INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
+                                        VALUES
+                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
+                values_update = (
+                    [id], new_ver, titulo, marca, stock, descricao, payload["preco"], vendedor_pessoa_id)
+
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(add_version_stmt, values_update)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': [id]}
+
+            elif ("stock" not in payload and "preco" not in payload and "descricao" in payload):    #so vem com descriçao
+                add_version_stmt = """  INSERT
+                                        INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
+                                        VALUES
+                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
+                values_update = (
+                    [id], new_ver, titulo, marca, stock, payload["descricao"], payload["preco"], vendedor_pessoa_id)
+
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(add_version_stmt, values_update)
+                cur.execute("COMMIT")
+
+                content = {'status': StatusCodes['success'], 'results': [id]}
+
+            elif ("stock" not in payload and "preco" not in payload and "descricao" not in payload):    #nao vem com nada manda erro
+                content = {"code": StatusCodes['api_error']}
+
+            """
+            #TODO not sure if user needs to also input old values to update everything even if still the same or only one value, consult after
+            add_version_stmt = """  """INSERT INTO
+                                    produto(id, marca, stock, descricao, preco, data, produto_id)
+                                    VALUES
+                                    """"""(%s, %s, %s, %s, %s, TIMESTAMP, %s)""""""
+            values_update = ([id], payload["marca"], payload["stock"], payload["descricao"], payload["preco"], payload["produto_id"])
+            cur.execute("BEGIN TRANSACTION")
+            cur.execute(add_version_stmt, values_update)
+            cur.execute("COMMIT")
+            content = {'status': StatusCodes['success'], 'results': [id]}
+            """
+
+        else:
+            content = {"code": StatusCodes['api_error']}
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        content = {'error:': str(error)}
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return jsonify(content)
+
+
+# GET
+@app.route('/dbproj/produto/<produto_id>', methods=['GET']) #POR CONCLUIR...
+def detalhes_produto(produto_id: str):
+    #logger.info(f"Detalhes e histórico para produto com id {produto_id}")
+    if not produto_id.isdigit():
+        #logger
+        return jsonify({'error' : 'Invalid product Id was provided', 'code': StatusCodes['api_error']})
+
+    conn = db_connection()
+    cur = conn.cursor()
+
+    try:
+
+        find_if_product = """   SELECT id
+                                FROM produto
+                                WHERE id = %s"""
+        cur.execute(find_if_product, [produto_id])
+        rows = cur.fetchall()
+        if(rows.len > 0):   #produto existe
+
+            #Do query to find if any of the subtables have a product with provided Id, if yes, do query also using data from that table
+            find_comp_stmt =    """     SELECT produto_id
+                                        FROM computador
+                                        WHERE produto_id = %s;
                                 """
-        values_versao = (payload['descricao'], payload['preco'], payload['produto_id'])
 
-        try:
-            cur.execute(comp_create_stmt, values_comp)
-            cur.execute(version_create_stmt, values_versao)
+            cur.execute(find_comp_stmt, [produto_id])
+            rows = cur.fetchall()
 
-            # commit the transaction
-            conn.commit()
-            response = {'status': StatusCodes['success'], 'results': f'Inserted produto (computador) {payload["id_produto"]}'}
+            if(rows.len() > 0):
+                comp_details_stmt = """  SELECT produto.titulo "Titulo", produto.stock "Stock", produto.preco "Preço", produto.num_versao "Versão", produto.marca "Marca", computador.processador "Processador", computador.sistema_operativo "SO", computador.armazenamento "Armazenamento", computador.camara "Câmara", produto.descricao "Descricao", produto.data "Data alteração"
+                                            FROM produto, computador
+                                            WHERE id = %s AND produto.id = computador.produto_id
+                                            ORDER BY data ASC;"""
 
-        except (Exception, psycopg2.DatabaseError) as error:
-            logger.error(f'POST /produto - error: {error}')
-            response = {'status': StatusCodes['internal_error'], 'errors': str(error)}
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(comp_details_stmt, [produto_id])
+                cur.execute("COMMIT")
 
-            # an error occurred, rollback
-            conn.rollback()
+                rows = cur.fetchall()
 
-        finally:
-            if conn is not None:
-                conn.close()
+                if (rows.len() > 0):
+                    content = {"code": StatusCodes['success']}
+                else:
+                    content = {"code": StatusCodes['api_error']}
 
-    elif(payload['tipo'] == 'televisor'):
-        tel_create_stmt = """INSERT INTO televisor
-                    (comprimento, largura, peso, resolucao, produto_id, produto_marca, produto_stock, produto_vendedor)
-                   VALUES
-                    (%d, %d, %d, %s, %d, %s, %d, %d)"""
-        values_tel = (payload['comprimento'], payload['largura'], payload['peso'], payload['resolucao'], payload['produto_id'], payload['produto_marca'], payload['produto_stock'], payload['produto_vendedor'])
+            else:
+                find_tel_stmt = """     SELECT produto_id
+                                        FROM televisor
+                                        WHERE produto_id = %s;"""
 
-        version_create_stmt = """INSERT INTO versao
-                                    (descricao, preco, data_alteracao, smartphone_produto_id)
-                                    VALUES
-                                    (%s, %f, TIMESTAMP, %d)
-                                        """
-        values_versao = (payload['descricao'], payload['preco'], payload['produto_id'])
+                cur.execute(find_tel_stmt, [produto_id])
+                rows = cur.fetchall()
+                if (rows.len() > 0):
+                    tel_details_stmt = """  SELECT produto.titulo "Titulo", produto.stock "Stock", produto.preco "Preço", produto.num_versao "Versão", produto.marca "Marca", televisor.comprimento "Comprimento", televisor.largura "Largura", televisor.peso "Peso", televisor.resolucao "Resolução", produto.descricao "Descricao", produto.data "Data alteração"
+                                            FROM produto, televisor
+                                            WHERE id = %s AND produto.id = televisor.produto_id
+                                            ORDER BY data ASC;"""
 
-        try:
-            cur.execute(tel_create_stmt, values_tel)
-            cur.execute(version_create_stmt, values_versao)
+                    cur.execute("BEGIN TRANSACTION")
+                    cur.execute(tel_details_stmt, [produto_id])
+                    cur.execute("COMMIT")
 
-            # commit the transaction
-            conn.commit()
-            response = {'status': StatusCodes['success'], 'results': f'Inserted produto (televisor) {payload["id_produto"]}'}
+                    rows = cur.fetchall()
 
-        except (Exception, psycopg2.DatabaseError) as error:
-            logger.error(f'POST /produto - error: {error}')
-            response = {'status': StatusCodes['internal_error'], 'errors': str(error)}
+                    if (rows.len() > 0):
+                        content = {"code": StatusCodes['success']}
+                    else:
+                        content = {"code": StatusCodes['api_error']}
 
-            # an error occurred, rollback
-            conn.rollback()
+                else:
+                    find_phone_stmt = """   SELECT produto_id
+                                            FROM smartphone
+                                            WHERE produto_id = %s;"""
 
-        finally:
-            if conn is not None:
-                conn.close()
+                    cur.execute(find_phone_stmt, [produto_id])
+                    rows = cur.fetchall()
+                    if (rows.len() > 0):
+                        phone_details_stmt = """  SELECT produto.titulo "Titulo", produto.stock "Stock", produto.preco "Preço", produto.num_versao "Versão", produto.marca "Marca", smartphone.modelo "Modelo", smartphone.cor "Cor", produto.descricao "Descricao", produto.data "Data alteração"
+                                                FROM produto, televisor
+                                                WHERE id = %s AND produto.id = televisor.produto_id
+                                                ORDER BY data ASC;"""
 
-    elif (payload['tipo'] == 'smartphone'):
-        phone_create_stmt = """INSERT INTO smartphone
-                        (modelo, cor, produto_id, produto_marca, produto_stock, produto_vendedor)
-                       VALUES
-                        (%s, %s, %d, %s, %d, %d)"""
-        values_phone = (payload['modelo'], payload['cor'], payload['produto_id'], payload['produto_marca'], payload['produto_stock'], payload['produto_vendedor'])
+                        cur.execute("BEGIN TRANSACTION")
+                        cur.execute(phone_details_stmt, [produto_id])
+                        cur.execute("COMMIT")
 
-        version_create_stmt = """INSERT INTO versao
-                                    (descricao, preco, data_alteracao, smartphone_produto_id)
-                                    VALUES
-                                    (%s, %f, TIMESTAMP, %d)
-                                        """
-        values_versao = (payload['descricao'], payload['preco'], payload['produto_id'])
+                        rows = cur.fetchall()
 
-        try:
-            cur.execute(phone_create_stmt, values_phone)
-            cur.execute(version_create_stmt, values_versao)
+                        if (rows.len() > 0):
+                            content = {"code": StatusCodes['success']}
+                        else:
+                            content = {"code": StatusCodes['api_error']}
 
-            # commit the transaction
-            conn.commit()
-            response = {'status': StatusCodes['success'], 'results': f'Inserted produto (smartphone) {payload["id_produto"]}'}
+                    else:
+                        #if not a specific type of product, prints general table
+                        produto_details_stmt = """  SELECT titulo "Titulo", stock "Stock", marca "Marca", preco "Preço", num_versao "Versão", descricao "Descricao", data "Data alteração"
+                                                    FROM produto
+                                                    WHERE id = %s 
+                                                    ORDER BY data ASC;"""
 
-        except (Exception, psycopg2.DatabaseError) as error:
-            logger.error(f'POST /produto - error: {error}')
-            response = {'status': StatusCodes['internal_error'], 'errors': str(error)}
+                        cur.execute("BEGIN TRANSACTION")
+                        cur.execute(produto_details_stmt, [produto_id])
+                        cur.execute("COMMIT")
 
-            # an error occurred, rollback
-            conn.rollback()
+                        rows = cur.fetchall()
 
-        finally:
-            if conn is not None:
-                conn.close()
+                        if (rows.len() > 0):
+                            content = {"code": StatusCodes['success']}
+                        else:
+                            content = {"code": StatusCodes['api_error']}
+
+        else:
+            #TODO error message for product not found
+            print("no error")
 
 
-    return flask.jsonify(response)
+    except (Exception, psycopg2.DatabaseError) as error:
+        content = {'error:': str(error)}
+    finally:
+        if conn is not None:
+            conn.close()
 
-if __name__ == '__main__':
-    
-    # set up logging
-    logging.basicConfig(filename='log_file.log')
-    logger = logging.getLogger('logger')
-    logger.setLevel(logging.DEBUG)
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
+    return jsonify(content)
 
-    # create formatter
-    formatter = logging.Formatter('%(asctime)s [%(levelname)s]:  %(message)s', '%H:%M:%S')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
 
-    host = '127.0.0.1'
-    port = 8080
-    app.run(host=host, debug=True, threaded=True, port=port)
-    logger.info(f'API v1.1 online: http://{host}:{port}')
+
+
+# MAIN
+if __name__ == "__main__":
+    time.sleep(1)  # just to let the DB start before this print :-)
+
+    app.run(host="localhost", port=8080, debug=True, threaded=True)
