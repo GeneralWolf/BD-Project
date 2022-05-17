@@ -883,6 +883,53 @@ def detalhes_produto(produto_id: str):
     return jsonify(content)
 
 
+@app.route('/proj/report/year', methods=['GET'])
+def obterEstatisticas():
+    conn = db_connection()
+    cur = conn.cursor()
+
+    payload = request.get_json()
+    print(payload) #Print de todos os parametros passados pelo .json
+
+    try:
+        if "token" in payload:
+            token = payload["token"]
+            print("ANTES: ", token)
+
+            aux_payload = descodifica_token(token)
+            print("DEPOIS: ", aux_payload)
+
+
+            cur.execute("""SELECT count(*) FROM Administrador WHERE pessoa_id = (SELECT id 
+                                                                                    FROM Pessoa 
+                                                                                    WHERE username = %s and password = %s);""",
+                        (aux_payload["username"], aux_payload["password"],))
+            rows = cur.fetchall()
+            count = int(rows[0][0])
+
+            if count == 0:
+                content = {'results': 'invalid'}
+            else:
+                cur.execute("""SELECT extract(month from data), sum(total), count(*)
+                                FROM encomenda
+                                WHERE data > CURRENT_DATE - INTERVAL '12 months'
+                                GROUP BY extract(month from data), extract(year from data)
+                                ORDER BY extract(year from data) asc, extract(month from data) asc""",
+                            (aux_payload["username"], aux_payload["password"],))
+                rows = cur.fetchall()
+
+                content = {'status': StatusCodes['success'], 'results': rows}
+
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        content = {'error:': str(error)}
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return jsonify(content)
+
+
 
 
 # MAIN

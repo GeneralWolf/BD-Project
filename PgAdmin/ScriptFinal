@@ -78,6 +78,7 @@ CREATE TABLE pessoa (
 CREATE TABLE encomenda (
 	id			 Serial,
 	data		 TIMESTAMP NOT NULL,
+	total		 NUMERIC(8,2) NOT NULL,
 	comprador_pessoa_id INTEGER NOT NULL,
 	PRIMARY KEY(id)
 );
