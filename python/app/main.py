@@ -3,6 +3,8 @@ import ast
 import psycopg2, time
 from flask import jsonify, request, Flask
 import hmac, hashlib, base64, json  # token
+from dotenv import load_dotenv
+import os
 
 app = Flask(__name__)
 
@@ -64,12 +66,11 @@ def descodifica_token(jwt):
 
 def db_connection():
     db = psycopg2.connect(
-        user="postgres",
-        password="postgres",
-        host="localhost",
-        port="5433",
-        database="postgres"
-    )
+        user = USER,
+        password = PASSWORD,
+        host = HOST,
+        port = PORT,
+        database = DATABASE)
 
     return db
 
@@ -383,6 +384,7 @@ def efetuaCompra():
         if "cart" in payload and "token" in payload:
             token = payload["token"]
             cart = payload["cart"]
+            total = 0
 
             aux_payload = descodifica_token(token)
 
@@ -393,7 +395,7 @@ def efetuaCompra():
                         (aux_payload["username"], aux_payload["password"],))
             aux_rows = cur.fetchall()
 
-            if aux_rows == 0:
+            if len(aux_rows) == 0:
                 content = {'results': 'invalid'}
             else:
                 pessoa_id = aux_rows[0][0]
@@ -419,7 +421,7 @@ def efetuaCompra():
                             stock = rows[0][0]
                             if stock >= quantidade:
                                 if not flag:
-                                    querie = """INSERT INTO encomenda(data, comprador_pessoa_id) VALUES(CURRENT_TIMESTAMP(0), %s);"""
+                                    querie = """INSERT INTO encomenda(data, total, comprador_pessoa_id) VALUES(CURRENT_TIMESTAMP(0), 0, %s);"""
                                     values = (pessoa_id,)
 
                                     cur.execute("BEGIN TRANSACTION;")
@@ -469,7 +471,23 @@ def efetuaCompra():
                                 cur.execute(querie2, values)
                                 cur.execute("COMMIT")
 
-                content = {'status': StatusCodes['success'], 'results': encomendaId}
+
+                                total += (quantidade*preco)
+
+
+                    if flag:
+                        querie = """UPDATE encomenda SET total = %s WHERE encomenda.id = (SELECT max(id) 
+                                                                                            FROM encomenda)"""
+                        values = (total,)
+
+                        cur.execute("BEGIN TRANSACTION;")
+                        cur.execute(querie, values)
+                        cur.execute("commit;")
+
+                if flag:
+                    content = {'status': StatusCodes['success'], 'results': encomendaId}
+                else:
+                    content = {'status': StatusCodes['success'], 'results': 'order denied'}
         else:
             content = {'results': 'invalid'}
     except (Exception, psycopg2.DatabaseError) as error:
@@ -935,5 +953,12 @@ def obterEstatisticas():
 # MAIN
 if __name__ == "__main__":
     time.sleep(1)  # just to let the DB start before this print :-)
+    
+    load_dotenv()
+    USER = os.getenv('USER')
+    PASSWORD = os.getenv('PASSWORD')
+    HOST = os.getenv('HOST')
+    PORT = os.getenv('PORT')
+    DATABASE = os.getenv('DATABASE')
 
     app.run(host="localhost", port=8080, debug=True, threaded=True)
