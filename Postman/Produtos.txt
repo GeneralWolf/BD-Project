@@ -5,10 +5,10 @@ Produto:
 
 
 	Televisor:
-		{"titulo": "TV LG OLED65A16LA", "marca": "LG", "stock": "1", "descricao": "A tecnologia do painel OLED faz toda a diferença para a experiência de visualização.", "preco": "1136"
+		{"titulo": "TV LG OLED65A16LA", "marca": "LG", "stock": "1", "descricao": "A tecnologia do painel OLED faz toda a diferença para a experiência de visualização.", "preco": "1136",
 			"comprimento": "891", "largura": "1449", "peso": "24", "resolucao": "4K Ultra HD"}
 
 
 	Smartphone:
-		{"titulo": "SAMSUNG Galaxy A22 5G", "marca": "SAMSUNG", "stock": "2", "descricao": "De uma experiência de jogo e streaming super fluída a partilhas e downloads super rápidos.", "preco": "210"
+		{"titulo": "SAMSUNG Galaxy A22 5G", "marca": "SAMSUNG", "stock": "2", "descricao": "De uma experiência de jogo e streaming super fluída a partilhas e downloads super rápidos.", "preco": "210",
 			"modelo": "Galaxy A22", "cor":"Cinzento"}

@@ -499,7 +499,7 @@ def efetuaCompra():
     return jsonify(content)
 
 
-@app.route('/dbproj/rating/<product_id>', methods=['POST'])
+@app.route('/dbproj/rating/<product_id>', methods=['POST']) #DONE
 def deixaRating(product_id):
     conn = db_connection()
     cur = conn.cursor()
@@ -543,7 +543,7 @@ def deixaRating(product_id):
                                         WHERE produto_id = %s and encomenda_id = %s;""",
                                     (product_id, last_order,))
                         rows = cur.fetchall()
-                        
+
                         #O produto em questão está presente na última encomenda
                         if len(rows) != 0:
                             versao = rows[0][0]
@@ -583,7 +583,6 @@ def deixaRating(product_id):
             conn.close()
 
     return jsonify(content)
-
 
 # PUT
 @app.route('/dbproj/user', methods=['PUT']) #DONE
@@ -901,7 +900,7 @@ def detalhes_produto(produto_id: str):
     return jsonify(content)
 
 
-@app.route('/proj/report/year', methods=['GET'])
+@app.route('/proj/report/year', methods=['GET']) #DONE
 def obterEstatisticas():
     conn = db_connection()
     cur = conn.cursor()
