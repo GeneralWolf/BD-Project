@@ -1053,8 +1053,8 @@ def detalhes_produto(produto_id: str):
                     rows = cur.fetchall()
                     if (rows.len() > 0):
                         phone_details_stmt = """  SELECT produto.titulo "Titulo", produto.stock "Stock", produto.preco "Preço", produto.num_versao "Versão", produto.marca "Marca", smartphone.modelo "Modelo", smartphone.cor "Cor", produto.descricao "Descricao", produto.data "Data alteração"
-                                                FROM produto, televisor
-                                                WHERE id = %s AND produto.id = televisor.produto_id
+                                                FROM produto, smartphone
+                                                WHERE id = %s AND produto.id = smartphone.produto_id
                                                 ORDER BY data ASC;"""
 
                         cur.execute("BEGIN TRANSACTION")
