@@ -94,10 +94,10 @@ CREATE TABLE rating (
 
 CREATE TABLE forum (
 	id		 INTEGER,
-	num_post		 NUMERIC(8,2),
+	num_post		 INTEGER,
 	post		 VARCHAR(512) NOT NULL,
 	forum_id		 INTEGER NOT NULL,
-	forum_num_post	 NUMERIC(8,2) NOT NULL,
+	forum_num_post	 INTEGER NOT NULL,
 	produto_id	 INTEGER NOT NULL,
 	produto_num_versao INTEGER NOT NULL,
 	PRIMARY KEY(id,num_post)
@@ -126,7 +126,7 @@ CREATE TABLE notificacao_encomenda (
 CREATE TABLE notificacao_forum (
 	notificacao_id INTEGER,
 	forum_id	 INTEGER NOT NULL,
-	forum_num_post NUMERIC(8,2) NOT NULL,
+	forum_num_post INTEGER NOT NULL,
 	PRIMARY KEY(notificacao_id)
 );
 
@@ -139,7 +139,7 @@ CREATE TABLE notificacao_pessoa (
 CREATE TABLE pessoa_forum (
 	pessoa_id	 INTEGER,
 	forum_id	 INTEGER,
-	forum_num_post NUMERIC(8,2),
+	forum_num_post INTEGER,
 	PRIMARY KEY(pessoa_id,forum_id,forum_num_post)
 );
 

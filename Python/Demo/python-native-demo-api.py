@@ -269,8 +269,8 @@ def registaUtilizador():
     return jsonify(content)
 
 
-# TODO meter as cenas da versao
-@app.route('/dbproj/produto', methods=['POST']) #POR TESTAR...
+
+@app.route('/dbproj/produto', methods=['POST']) #DONE
 def addProduto():
     conn = db_connection()
     cur = conn.cursor()
@@ -279,88 +279,114 @@ def addProduto():
     print(payload) #Print de todos os parametros passados pelo .json
 
     try:
-        if "id" in payload and "marca" in payload and "stock" in payload and "vendedor_pessoa_id" in payload and "preco" in payload:
-            id = payload["id"]
+        if "marca" in payload and "stock" in payload and "preco" in payload and "titulo" in payload and "token" in payload:
+            #id = payload["id"]
             marca = payload["marca"]
             stock = payload["stock"]
-            vendedor_id = payload["vendedor_pessoa_id"]
             preco = payload["preco"]
+            titulo = payload["titulo"]
+            token = payload["token"]
 
-            if ("descricao" in payload):
-                descricao = payload["descricao"]
-            else:
-                descricao = "-"
+            #token related stuff
+            aux_token = descodifica_token(token)
 
-            query = """ INSERT INTO 
-                        produto(id, marca, stock, vendedor_pessoa_id, descricao, preco, data, produto_num_versao)
-                        VALUES
-                        (%s, %s, %s, %s, %s, %s, TIMESTAMP, %s)"""
-            values = (id, marca, stock, vendedor_id, descricao, preco, 1)
+            cur.execute(""" SELECT id FROM pessoa WHERE username = %s AND password = %s;""", (aux_token["username"], aux_token["password"],))
+            aux_rows = cur.fetchall()
+            print(aux_rows)
+            vendedor_id = aux_rows[0][0]
 
-
-            cur.execute("BEGIN TRANSACTION")
-            cur.execute(query, values)
-            cur.execute("COMMIT")
-
-
-            if("processador" in payload and "sistema_operativo" in payload and "armazenamento" in payload and "camara" in payload):
-
-                processador = payload["processador"]
-                sistema_operativo = payload["sistema_operativo"]
-                armazenamento = payload["armazenamento"]
-                camara = payload["camara"]
-
-                query2 = """ INSERT INTO
-                            computador(processador, sistema_operativo, armazenamento, camara, produto_id, produto_num_versao)
-                            VALUES
-                            (%s, %s, %s, %s, %s)"""
-                values2 = (processador, sistema_operativo, armazenamento, camara, id, 1)
-
-                cur.execute("BEGIN TRANSACTION")
-                cur.execute(query2, values2)
-                cur.execute("COMMIT")
-
-                content = {'status': StatusCodes['success'], 'results': id}
-
-            elif("comprimento" in payload and "largura" in payload and "peso" in payload and "resolucao" in payload):
-
-                comprimento = payload["comprimento"]
-                largura = payload["largura"]
-                peso = payload["peso"]
-                resolucao = payload["resolucao"]
-
-
-                query2 = """INSERT INTO
-                            televisor(comprimento, largura, peso, resolucao, produto_id, produto_num_versao)
-                            VALUES
-                            (%s, %s, %s, %s, %s, %s)"""
-                values2 = (comprimento, largura, peso, resolucao, id, 1)
-
-                cur.execute("BEGIN TRANSACTION")
-                cur.execute(query2, values2)
-                cur.execute("COMMIT")
-
-                content = {'status': StatusCodes['success'], 'results': id}
-
-            elif("modelo" in payload and "cor" in payload):
-
-                modelo = payload["modelo"]
-                cor = payload["cor"]
-
-                query2 = """INSERT INTO
-                            smartphone(modelo, cor, produto_id, produto_num_versao)
-                            VALUES
-                            (%s, %s, %s, %s)"""
-                values2 = (modelo, cor, id, 1)
-
-                cur.execute("BEGIN TRANSACTION")
-                cur.execute(query2, values2)
-                cur.execute("COMMIT")
-
-                content = {'status': StatusCodes['success'], 'results': id}
-
-            else:
+            if len(aux_rows) == 0:
                 content = {'results': 'invalid'}
+            else:
+                print("vendedor id: " + str(vendedor_id))
+
+                cur.execute("""SELECT COALESCE(max(id), 0)
+                                FROM produto;""")
+
+                aux_rows = cur.fetchall()
+                currId = aux_rows[0][0] + 1
+
+                print(currId)
+
+
+                if ("descricao" in payload):
+                    descricao = payload["descricao"]
+                else:
+                    descricao = "-"
+
+                query = """ INSERT INTO 
+                            produto(id, num_versao, titulo, marca, stock, descricao, preco, data, produto_id, produto_num_versao, vendedor_pessoa_id)
+                            VALUES
+                            (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP(0), %s, %s, %s)"""
+                values = (currId, 1, titulo, marca, stock, descricao, preco, currId, 1, vendedor_id)
+
+
+
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(query, values)
+                cur.execute("COMMIT")
+
+
+                if("processador" in payload and "sistema_operativo" in payload and "armazenamento" in payload and "camara" in payload):
+
+                    processador = payload["processador"]
+                    sistema_operativo = payload["sistema_operativo"]
+                    armazenamento = payload["armazenamento"]
+                    camara = payload["camara"]
+
+                    query2 = """ INSERT INTO
+                                computador(processador, sistema_operativo, armazenamento, camara, produto_id, produto_num_versao)
+                                VALUES
+                                (%s, %s, %s, %s, %s, %s)"""
+                    values2 = (processador, sistema_operativo, armazenamento, camara, currId, 1)
+
+                    cur.execute("BEGIN TRANSACTION")
+                    cur.execute(query2, values2)
+                    cur.execute("COMMIT")
+
+                    content = {'status': StatusCodes['success'], 'results': currId}
+
+                elif("comprimento" in payload and "largura" in payload and "peso" in payload and "resolucao" in payload):
+
+                    comprimento = payload["comprimento"]
+                    largura = payload["largura"]
+                    peso = payload["peso"]
+                    resolucao = payload["resolucao"]
+
+
+                    query2 = """INSERT INTO
+                                televisor(comprimento, largura, peso, resolucao, produto_id, produto_num_versao)
+                                VALUES
+                                (%s, %s, %s, %s, %s, %s)"""
+                    values2 = (comprimento, largura, peso, resolucao, currId, 1)
+
+                    cur.execute("BEGIN TRANSACTION")
+                    cur.execute(query2, values2)
+                    cur.execute("COMMIT")
+
+                    content = {'status': StatusCodes['success'], 'results': currId}
+
+                elif("modelo" in payload and "cor" in payload):
+
+                    modelo = payload["modelo"]
+                    cor = payload["cor"]
+
+
+                    query2 = """INSERT INTO
+                                smartphone(modelo, cor, produto_id, produto_num_versao)
+                                VALUES
+                                (%s, %s, %s, %s)"""
+                    values2 = (modelo, cor, currId, 1)
+
+                    cur.execute("BEGIN TRANSACTION")
+                    cur.execute(query2, values2)
+                    cur.execute("COMMIT")
+
+
+                    content = {'status': StatusCodes['success'], 'results': currId}
+
+                else:
+                    content = {'results': 'invalid'}
         else:
             content = {'results': 'invalid'}
     except (Exception, psycopg2.DatabaseError) as error:
@@ -564,6 +590,182 @@ def deixaRating(product_id):
 
     return jsonify(content)
 
+@app.route('/dbproj/questions/<product_id>', methods=['POST'])
+def motherComment(product_id):
+    conn = db_connection()
+    cur = conn.cursor()
+
+    payload = request.get_json()
+
+    numPost = 1
+
+    # got get the max(id) of forum posts here for id
+    cur.execute("""SELECT COALESCE(max(id), 0)
+                    FROM forum;""")
+    aux_rows = cur.fetchall()
+    print(aux_rows[0][0])
+    threadId = aux_rows[0][0] + 1
+    print(threadId)
+
+
+    #cur.execute(""" SELECT max(id)
+     #               FROM forum
+      #              WHERE forum.produto_id = %s AND forum.produto_num_versao = %s;""",)
+
+    #aux_rows = cur.fetchall()
+
+    #if(len(aux_rows) == 0):
+     #   id = 1
+
+    #else:
+     #   id = aux_rows[0][0] + 1
+
+    # got get the max(id) of forum posts here for id
+
+
+    #cur.execute(""" SELECT max(versao)
+     #               FROM produto
+      #              WHERE produto.id = %s""", (product_id))
+
+    #aux_rows = cur.fetchall()
+    #versionNr = aux_rows[0][0]
+
+
+    try:
+        if "post" in payload and "token" in payload:
+
+            aux_payload = descodifica_token(payload["token"])
+
+
+
+            cur.execute(""" SELECT pessoa_id 
+                            FROM Comprador 
+                            WHERE pessoa_id = (SELECT id FROM Pessoa WHERE username = %s and password = %s);""",
+                        (aux_payload["username"], aux_payload["password"],))
+            aux_rows = cur.fetchall()
+            print(aux_rows[0][0])
+
+            if len(aux_rows) == 0:
+                content = {'results': 'invalid'}
+            else:
+                post = payload["post"]
+                pessoa_id = aux_rows[0][0]
+
+                versionNr = payload["produto_num_versao"]
+
+                query = """ INSERT INTO 
+                            forum(id, num_post, post, forum_id, forum_num_post, produto_id, produto_num_versao)
+                            VALUES
+                            (%s, %s, %s, %s, %s, %s, %s);
+                            """
+                values = (threadId, numPost, post, threadId, numPost, product_id, versionNr)
+
+
+                queryAux = """  INSERT INTO
+                                pessoa_forum(pessoa_id, forum_id, forum_num_post)
+                                VALUES
+                                (%s, %s, %s);"""
+                valuesAux = (pessoa_id, threadId, numPost)
+
+                cur.execute("BEGIN TRANSACTION")
+                cur.execute(query, values)
+                cur.execute(queryAux, valuesAux)
+                cur.execute("COMMIT;")
+
+                content = {'status': StatusCodes['success'], 'results': threadId}
+
+        else:
+            content = {'results': 'no post'}
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        content = {'error:': str(error)}
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return jsonify(content)
+
+
+@app.route('/dbproj/questions/<product_id>/<parent_question_id>', methods=['POST'])
+def childComment(product_id, parent_question_id):
+    print("yo")
+    conn = db_connection()
+    cur = conn.cursor()
+
+    print("im here early")
+
+    payload = request.get_json()
+
+    print("im here")
+
+    cur.execute(""" SELECT COALESCE(max(num_post), 0), produto_num_versao
+                    FROM forum
+                    WHERE forum.id = %s GROUP BY produto_num_versao""", (parent_question_id,))
+
+    aux_rows = cur.fetchall()
+
+    try:
+        if (len(aux_rows) > 0):
+            numPost = aux_rows[0][0] + 1
+            print(numPost)
+            prodVersao = aux_rows[0][1]
+            print(prodVersao)
+
+            if("post" in payload and "token" in payload):
+
+                post = payload["post"]
+
+                aux_payload = descodifica_token(payload["token"])
+
+
+                cur.execute(""" SELECT id 
+                                FROM pessoa 
+                                WHERE username = %s and password = %s;""",
+                            (aux_payload["username"], aux_payload["password"],))
+
+                aux_rows = cur.fetchall()
+
+                if(len(aux_rows) == 0):
+                    content = {'results': 'invalid'}
+                else:
+
+                    pessoa_id = aux_rows[0][0]
+                    print(pessoa_id)
+
+                    query = """ INSERT INTO 
+                                forum(id, num_post, post, forum_id, forum_num_post, produto_id, produto_num_versao)
+                                VALUES
+                                (%s, %s, %s, %s, %s, %s, %s);"""
+                    values = (parent_question_id, numPost, post, parent_question_id, numPost, product_id, prodVersao,)
+
+                    queryAux = """  INSERT INTO
+                                    pessoa_forum(pessoa_id, forum_id, forum_num_post)
+                                    VALUES
+                                    (%s, %s, %s);"""
+                    valuesAux = (pessoa_id, parent_question_id, numPost,)
+
+                    cur.execute("BEGIN TRANSACTION")
+                    cur.execute(query, values)
+                    cur.execute(queryAux, valuesAux)
+                    cur.execute("COMMIT;")
+
+                    content = {'status': StatusCodes['success'], 'results': parent_question_id}
+
+            else:
+                content = {'results': 'no post'}
+
+        else:
+            content = {'results': 'no parent thread found'}
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        content = {'error:': str(error)}
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return jsonify(content)
+
+
 
 # PUT
 @app.route('/dbproj/user', methods=['PUT']) #DONE
@@ -600,7 +802,7 @@ def autenticaUtilizador():
     return jsonify(content)
 
 
-@app.route('/dbproj/produto/<id>', methods=['PUT']) #POR TESTAR...
+@app.route('/dbproj/produto/<id>', methods=['PUT']) #DONE
 def atualizar_produto(id: str):
     if not id.isdigit():
         return jsonify({'error' : 'Invalid product Id was provided', 'code': StatusCodes['api_error']})
@@ -616,7 +818,8 @@ def atualizar_produto(id: str):
                                 WHERE produto.id = %s;"""
         cur.execute(find_product_stmt, [id])
         rows = cur.fetchall()
-        if(rows.len() > 0):
+        if(len(rows) > 0):
+
 
             versions = list()
             #find max version since through sql seems ill have to use cursors
@@ -634,10 +837,10 @@ def atualizar_produto(id: str):
 
             if("stock" in payload and "preco" in payload and "descricao" in payload):   #vem com tudo   #TODO nao adicionei produto_id porque o jo tirou
                 add_version_stmt = """  INSERT
-                                        INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
+                                        INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, produto_id, produto_num_versao, vendedor_pessoa_id)
                                         VALUES
-                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
-                values_update = ([id], new_ver, titulo, marca, payload["stock"], payload["descricao"], payload["preco"],vendedor_pessoa_id)
+                                        (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP(0), %s, %s, %s)"""
+                values_update = ([id], new_ver, titulo, marca, payload["stock"], payload["descricao"], payload["preco"], [id], int(max(versions)), vendedor_pessoa_id)
 
                 cur.execute("BEGIN TRANSACTION")
                 cur.execute(add_version_stmt, values_update)
@@ -649,8 +852,8 @@ def atualizar_produto(id: str):
                 add_version_stmt = """  INSERT
                                         INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
                                         VALUES
-                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
-                values_update = ([id], new_ver, titulo, marca, payload["stock"], descricao, payload["preco"], vendedor_pessoa_id)
+                                        (%s, %s, %s, %s, %s, %S, %s, CURRENT_TIMESTAMP(0), %s, %s, %s)"""
+                values_update = ([id], new_ver, titulo, marca, payload["stock"], descricao, payload["preco"], [id], int(max(versions)), vendedor_pessoa_id)
 
                 cur.execute("BEGIN TRANSACTION")
                 cur.execute(add_version_stmt, values_update)
@@ -662,8 +865,8 @@ def atualizar_produto(id: str):
                 add_version_stmt = """  INSERT
                                         INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
                                         VALUES
-                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
-                values_update = ([id], new_ver, titulo, marca, payload["stock"], payload["descricao"], preco, vendedor_pessoa_id)
+                                        (%s, %s, %s, %s, %s, %S, %s, CURRENT_TIMESTAMP(0), %s, %s, %s)"""
+                values_update = ([id], new_ver, titulo, marca, payload["stock"], payload["descricao"], preco, [id], int(max(versions)), vendedor_pessoa_id)
 
                 cur.execute("BEGIN TRANSACTION")
                 cur.execute(add_version_stmt, values_update)
@@ -675,9 +878,9 @@ def atualizar_produto(id: str):
                 add_version_stmt = """  INSERT
                                         INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
                                         VALUES
-                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
+                                        (%s, %s, %s, %s, %s, %S, %s, CURRENT_TIMESTAMP(0), %s, %s, %s)"""
                 values_update = (
-                [id], new_ver, titulo, marca, payload["stock"], descricao, preco, vendedor_pessoa_id)
+                [id], new_ver, titulo, marca, payload["stock"], descricao, preco, [id], int(max(versions)), vendedor_pessoa_id)
 
                 cur.execute("BEGIN TRANSACTION")
                 cur.execute(add_version_stmt, values_update)
@@ -689,9 +892,9 @@ def atualizar_produto(id: str):
                 add_version_stmt = """  INSERT
                                         INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
                                         VALUES
-                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
+                                        (%s, %s, %s, %s, %s, %S, %s, CURRENT_TIMESTAMP(0), %s, %s, %s)"""
                 values_update = (
-                    [id], new_ver, titulo, marca, stock, payload["descricao"], payload["preco"], vendedor_pessoa_id)
+                    [id], new_ver, titulo, marca, stock, payload["descricao"], payload["preco"], [id], int(max(versions)), vendedor_pessoa_id)
 
                 cur.execute("BEGIN TRANSACTION")
                 cur.execute(add_version_stmt, values_update)
@@ -703,9 +906,9 @@ def atualizar_produto(id: str):
                 add_version_stmt = """  INSERT
                                         INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
                                         VALUES
-                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
+                                        (%s, %s, %s, %s, %s, %S, %s, CURRENT_TIMESTAMP(0), %s, %s, %s)"""
                 values_update = (
-                    [id], new_ver, titulo, marca, stock, descricao, payload["preco"], vendedor_pessoa_id)
+                    [id], new_ver, titulo, marca, stock, descricao, payload["preco"], [id], int(max(versions)), vendedor_pessoa_id)
 
                 cur.execute("BEGIN TRANSACTION")
                 cur.execute(add_version_stmt, values_update)
@@ -717,9 +920,9 @@ def atualizar_produto(id: str):
                 add_version_stmt = """  INSERT
                                         INTO produto(id, num_versao, titulo, marca, stock, descricao, preco, data, vendedor_pessoa_id)
                                         VALUES
-                                        (%s, %s, %s, %s, %s, %S, %s, TIMESTAMP, %s)"""
+                                        (%s, %s, %s, %s, %s, %S, %s, CURRENT_TIMESTAMP(0), %s, %s, %s)"""
                 values_update = (
-                    [id], new_ver, titulo, marca, stock, payload["descricao"], payload["preco"], vendedor_pessoa_id)
+                    [id], new_ver, titulo, marca, stock, payload["descricao"], payload["preco"], [id], int(max(versions)), vendedor_pessoa_id)
 
                 cur.execute("BEGIN TRANSACTION")
                 cur.execute(add_version_stmt, values_update)
@@ -756,12 +959,9 @@ def atualizar_produto(id: str):
 
 
 # GET
-@app.route('/dbproj/produto/<produto_id>', methods=['GET']) #POR CONCLUIR...
-def detalhes_produto(produto_id: str):
+@app.route('/dbproj/produto/<produto_id>', methods=['GET']) #DONE
+def detalhes_produto(produto_id):
     #logger.info(f"Detalhes e histórico para produto com id {produto_id}")
-    if not produto_id.isdigit():
-        #logger
-        return jsonify({'error' : 'Invalid product Id was provided', 'code': StatusCodes['api_error']})
 
     conn = db_connection()
     cur = conn.cursor()
@@ -771,9 +971,10 @@ def detalhes_produto(produto_id: str):
         find_if_product = """   SELECT id
                                 FROM produto
                                 WHERE id = %s"""
-        cur.execute(find_if_product, [produto_id])
+
+        cur.execute(find_if_product, produto_id,)
         rows = cur.fetchall()
-        if(rows.len > 0):   #produto existe
+        if(len(rows) > 0):   #produto existe
 
             #Do query to find if any of the subtables have a product with provided Id, if yes, do query also using data from that table
             find_comp_stmt =    """     SELECT produto_id
@@ -781,23 +982,23 @@ def detalhes_produto(produto_id: str):
                                         WHERE produto_id = %s;
                                 """
 
-            cur.execute(find_comp_stmt, [produto_id])
+            cur.execute(find_comp_stmt, produto_id,)
             rows = cur.fetchall()
 
-            if(rows.len() > 0):
+            if(len(rows) > 0):
                 comp_details_stmt = """  SELECT produto.titulo "Titulo", produto.stock "Stock", produto.preco "Preço", produto.num_versao "Versão", produto.marca "Marca", computador.processador "Processador", computador.sistema_operativo "SO", computador.armazenamento "Armazenamento", computador.camara "Câmara", produto.descricao "Descricao", produto.data "Data alteração"
                                             FROM produto, computador
                                             WHERE id = %s AND produto.id = computador.produto_id
                                             ORDER BY data ASC;"""
 
-                cur.execute("BEGIN TRANSACTION")
-                cur.execute(comp_details_stmt, [produto_id])
-                cur.execute("COMMIT")
+                cur.execute(comp_details_stmt, produto_id,)
 
                 rows = cur.fetchall()
 
-                if (rows.len() > 0):
-                    content = {"code": StatusCodes['success']}
+                if (len(rows) > 0):
+                    content = {'status': StatusCodes['success'], 'results': rows}
+                   # for row in rows:
+                    #    listagem += [{'Titulo': row[0], 'Stock': row[1], 'Preço': row[2], 'Versão': row[3], 'Marca': row[4], 'Cpu': row[5], 'SO': row[6], 'Armazenamento': row[7], 'Camara': row[8], 'Descrição': row[9], 'Data alteração': row[10]}]
                 else:
                     content = {"code": StatusCodes['api_error']}
 
@@ -806,46 +1007,54 @@ def detalhes_produto(produto_id: str):
                                         FROM televisor
                                         WHERE produto_id = %s;"""
 
-                cur.execute(find_tel_stmt, [produto_id])
+                cur.execute(find_tel_stmt, produto_id,)
                 rows = cur.fetchall()
-                if (rows.len() > 0):
+                if (len(rows) > 0):
                     tel_details_stmt = """  SELECT produto.titulo "Titulo", produto.stock "Stock", produto.preco "Preço", produto.num_versao "Versão", produto.marca "Marca", televisor.comprimento "Comprimento", televisor.largura "Largura", televisor.peso "Peso", televisor.resolucao "Resolução", produto.descricao "Descricao", produto.data "Data alteração"
                                             FROM produto, televisor
                                             WHERE id = %s AND produto.id = televisor.produto_id
                                             ORDER BY data ASC;"""
 
-                    cur.execute("BEGIN TRANSACTION")
-                    cur.execute(tel_details_stmt, [produto_id])
-                    cur.execute("COMMIT")
+                    cur.execute(tel_details_stmt, produto_id,)
 
                     rows = cur.fetchall()
 
-                    if (rows.len() > 0):
-                        content = {"code": StatusCodes['success']}
+                    if (len(rows) > 0):
+                        content = {'status': StatusCodes['success'], 'results': rows}
+                        #for row in rows:
+                           # listagem += [
+                            #    {'Titulo': row[0], 'Stock': row[1], 'Preço': row[2], 'Versão': row[3], 'Marca': row[4],
+                             #    'Comprimento': row[5], 'Largura': row[6], 'Peso': row[7], 'Resolução': row[8],
+                              #   'Descrição': row[9], 'Data alteração': row[10]}]
                     else:
                         content = {"code": StatusCodes['api_error']}
 
                 else:
+
                     find_phone_stmt = """   SELECT produto_id
                                             FROM smartphone
                                             WHERE produto_id = %s;"""
 
-                    cur.execute(find_phone_stmt, [produto_id])
+                    cur.execute(find_phone_stmt, produto_id,)
                     rows = cur.fetchall()
-                    if (rows.len() > 0):
-                        phone_details_stmt = """  SELECT produto.titulo "Titulo", produto.stock "Stock", produto.preco "Preço", produto.num_versao "Versão", produto.marca "Marca", smartphone.modelo "Modelo", smartphone.cor "Cor", produto.descricao "Descricao", produto.data "Data alteração"
-                                                FROM produto, televisor
-                                                WHERE id = %s AND produto.id = televisor.produto_id
-                                                ORDER BY data ASC;"""
 
-                        cur.execute("BEGIN TRANSACTION")
-                        cur.execute(phone_details_stmt, [produto_id])
-                        cur.execute("COMMIT")
+
+                    if (len(rows) > 0):
+                        phone_details_stmt = """SELECT produto.titulo, produto.stock , produto.preco , produto.num_versao , produto.marca , smartphone.modelo , smartphone.cor , produto.descricao , produto.data 
+                                                FROM produto, smartphone
+                                                WHERE produto.id = %s AND produto.id = smartphone.produto_id
+                                                ORDER BY data ASC;"""
+                        values = (produto_id,)
+
+                        cur.execute(phone_details_stmt, values)
 
                         rows = cur.fetchall()
 
-                        if (rows.len() > 0):
-                            content = {"code": StatusCodes['success']}
+                        if (len(rows) > 0):
+                            content = {'status': StatusCodes['success'], 'results': rows}
+                            #for row in rows:
+                             #   listagem += [{'Titulo': row[0], 'Stock': row[1], 'Preço': row[2], 'Versão': row[3],
+                              #                'Marca': row[4], 'Cor': row[5], 'Modelo': row[6], 'Descrição': row[9], 'Data alteração': row[10]}]
                         else:
                             content = {"code": StatusCodes['api_error']}
 
@@ -857,19 +1066,22 @@ def detalhes_produto(produto_id: str):
                                                     ORDER BY data ASC;"""
 
                         cur.execute("BEGIN TRANSACTION")
-                        cur.execute(produto_details_stmt, [produto_id])
+                        cur.execute(produto_details_stmt, produto_id,)
                         cur.execute("COMMIT")
 
                         rows = cur.fetchall()
 
-                        if (rows.len() > 0):
-                            content = {"code": StatusCodes['success']}
+
+                        if (len(rows) > 0):
+                            content = {'status': StatusCodes['success'], 'results': rows}
+                            #for row in rows:
+                             #   listagem += [{'Titulo': row[0], 'Stock': row[1], 'Preço': row[2], 'Versão': row[3],
+                             #                 'Marca': row[4], 'Descrição': row[9], 'Data alteração': row[10]}]
                         else:
                             content = {"code": StatusCodes['api_error']}
 
         else:
-            #TODO error message for product not found
-            print("no error")
+            content = {"code": StatusCodes['api_error']}
 
 
     except (Exception, psycopg2.DatabaseError) as error:
@@ -881,7 +1093,50 @@ def detalhes_produto(produto_id: str):
     return jsonify(content)
 
 
+#GET
+@app.route('/dbproj/user/<user_id>', methods=['GET'])
+def consultaNoptificacoes(user_id):
 
+    conn = db_connection()
+    cur = conn.cursor()
+
+
+    try:
+        payload = request.get_json()
+
+        if "token" in payload:
+            aux_payload = descodifica_token(payload["token"])
+            cur.execute(""" SELECT id 
+                            FROM pessoa
+                            WHERE %s = (SELECT id FROM Pessoa WHERE username = %s and password = %s);""",(user_id, aux_payload["username"], aux_payload["password"],))
+
+            aux_rows = cur.fetchall()
+            if(len(aux_rows) == 0):
+                content = {'results': 'invalid'}
+            else:
+
+                #TODO error is in query
+                cur.execute("SELECT id, mensagem FROM notificacao, notificacao_pessoa WHERE notificacao.id = notificacao_pessoa.notificacao_id AND notificacao_pessoa.pessoa_id = %s;", (user_id,))
+
+
+                retRows = cur.fetchall()
+                print(retRows)      #is coming out empty
+
+                if (len(retRows) > 0):
+                    content = {"code": StatusCodes['success'], "return" : retRows}
+                else:
+                    content = {"code": StatusCodes['api_error'], "return" : retRows}
+
+        else:
+            content = {'results': 'invalid'}
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        content = {'error:': str(error)}
+    finally:
+        if conn is not None:
+            conn.close()
+
+    return jsonify(content)
 
 # MAIN
 if __name__ == "__main__":
